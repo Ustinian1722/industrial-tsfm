@@ -1,0 +1,7 @@
+IndusTSFM
+Copyright 2026 IndusTSFM contributors.
+
+The repository contains original project code, experiment configurations,
+documentation, and tests. Third-party dependencies, pretrained checkpoints,
+and datasets are not relicensed by this notice; see THIRD_PARTY_NOTICES.md and
+the referenced upstream terms before downloading or redistributing them.

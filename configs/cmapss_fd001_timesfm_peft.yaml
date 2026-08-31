@@ -1,0 +1,54 @@
+project:
+  name: industrial-tsfm-phase3-cmapss-fd001-timesfm-peft
+  version: "0.3"
+
+dataset:
+  name: cmapss
+  subset: FD001
+  raw_dir: data/raw
+  include_settings: true
+  include_sensors: true
+  # The official TimesFM LoRA example requires a multiple of 32.
+  context_length: 32
+  horizon: 8
+  train_window_stride: 1
+  evaluation_origins: last
+  train_fraction: 0.80
+  validation_fraction: 0.20
+  entity_split_seed: 2026
+
+preprocessing:
+  scaler: source_only_for_mase_reference
+  epsilon: 1.0e-8
+
+peft:
+  support_seed: 2026
+  support_window_stride: 32
+  support_fractions: [0.0, 0.01, 0.05, 0.10]
+  source_adapter:
+    enabled: true
+  target_adapter:
+    enabled: true
+
+runtime:
+  seeds: [42]
+  device: auto
+  output_dir: results
+  torch_num_threads: 1
+
+models:
+  timesfm_transformers:
+    model_id: google/timesfm-2.5-200m-transformers
+    lora_r: 4
+    lora_alpha: 8
+    lora_dropout: 0.05
+    target_modules: all-linear
+    # A bounded, reproducible first profile; raise this for scale studies.
+    max_train_series: 512
+    batch_size: 32
+    epochs: 1
+    learning_rate: 0.0001
+    weight_decay: 0.0
+    max_grad_norm: 1.0
+    inference_batch_size: 32
+    force_flip_invariance: false

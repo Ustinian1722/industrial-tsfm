@@ -1,0 +1,60 @@
+project:
+  name: industrial-tsfm-cross-domain-ims-bearings
+  version: "0.1"
+
+dataset:
+  name: ims_bearings_cross_domain
+  source_dataset: ims_bearings
+  target_dataset: ims_bearings
+  raw_dir: data/raw/ims_bearings
+  subsets: [1st_test, 2nd_test, 3rd_test]
+  file_interval_seconds: 600
+  context_length: 32
+  horizon: 8
+  train_window_stride: 1
+  evaluation_origins: last
+  evaluation_window_stride: 1
+  include_last_evaluation_origin: true
+
+preprocessing:
+  scaler: source_train_only
+  epsilon: 1.0e-8
+
+selection:
+  metric: normalized_rmse
+  constraints: {}
+
+runtime:
+  seeds: [42, 43, 44]
+  device: auto
+  output_dir: results
+  torch_num_threads: 1
+
+models:
+  naive:
+    enabled: true
+  patchtst:
+    enabled: true
+    patch_len: 8
+    stride: 4
+    d_model: 64
+    n_heads: 4
+    e_layers: 2
+    d_ff: 128
+    dropout: 0.10
+    batch_size: 128
+    epochs: 10
+    patience: 3
+    learning_rate: 0.001
+    weight_decay: 0.0001
+  timesfm:
+    enabled: false
+  chronos:
+    enabled: false
+  chronos2:
+    enabled: false
+  moirai2:
+    enabled: true
+    model_id: Salesforce/moirai-2.0-R-small
+    inference_batch_size: 16
+    point_quantile: 0.5

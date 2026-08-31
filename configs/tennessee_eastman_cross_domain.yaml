@@ -1,0 +1,79 @@
+project:
+  name: industrial-tsfm-cross-domain-tennessee-eastman
+  version: "0.1"
+
+dataset:
+  name: tennessee_eastman_cross_domain
+  source_dataset: tennessee_eastman
+  target_dataset: tennessee_eastman
+  raw_dir: data/raw/tennessee_eastman
+  train_disturbances: [1, 2, 3, 4, 5, 6, 7, 8]
+  validation_disturbances: [9, 10]
+  test_disturbances: [11, 12, 13, 14, 15]
+  feature_set: measured
+  context_length: 32
+  horizon: 8
+  train_window_stride: 1
+  evaluation_origins: last
+  evaluation_window_stride: 1
+  include_last_evaluation_origin: true
+
+preprocessing:
+  scaler: source_train_only
+  epsilon: 1.0e-8
+
+selection:
+  metric: normalized_rmse
+  constraints: {}
+
+runtime:
+  seeds: [42]
+  device: auto
+  output_dir: results
+  torch_num_threads: 1
+
+models:
+  naive:
+    enabled: true
+  patchtst:
+    enabled: true
+    patch_len: 8
+    stride: 4
+    d_model: 64
+    n_heads: 4
+    e_layers: 2
+    d_ff: 128
+    dropout: 0.10
+    batch_size: 128
+    epochs: 10
+    patience: 3
+    learning_rate: 0.001
+    weight_decay: 0.0001
+  timesfm:
+    enabled: true
+    model_id: google/timesfm-2.5-200m-pytorch
+    max_context: 1024
+    per_core_batch_size: 32
+    inference_batch_size: 256
+    normalize_inputs: false
+    force_flip_invariance: true
+    infer_is_positive: false
+  chronos:
+    enabled: true
+    model_id: amazon/chronos-t5-tiny
+    num_samples: 20
+    inference_batch_size: 16
+    temperature: 1.0
+    top_k: 50
+    top_p: 1.0
+  chronos2:
+    enabled: true
+    model_id: amazon/chronos-2
+    max_context: 8192
+    inference_batch_size: 64
+    cross_learning: false
+  moirai2:
+    enabled: true
+    model_id: Salesforce/moirai-2.0-R-small
+    inference_batch_size: 16
+    point_quantile: 0.5

@@ -1,0 +1,73 @@
+project:
+  name: industrial-tsfm-cross-regime-cmapss
+  version: "0.4"
+
+dataset:
+  name: cmapss_cross_regime
+  source_subset: FD001
+  target_subsets: [FD002, FD003, FD004]
+  raw_dir: data/raw
+  include_settings: true
+  include_sensors: true
+  context_length: 16
+  horizon: 8
+  train_window_stride: 1
+  evaluation_origins: last
+  train_fraction: 0.80
+  validation_fraction: 0.20
+  entity_split_seed: 2026
+
+preprocessing:
+  scaler: source_train_only
+  epsilon: 1.0e-8
+
+selection:
+  metric: normalized_rmse
+  constraints: {}
+
+runtime:
+  seeds: [42]
+  device: auto
+  output_dir: results
+  torch_num_threads: 1
+
+models:
+  naive:
+    enabled: true
+  patchtst:
+    enabled: true
+    patch_len: 8
+    stride: 4
+    d_model: 64
+    n_heads: 4
+    e_layers: 2
+    d_ff: 128
+    dropout: 0.10
+    batch_size: 128
+    epochs: 10
+    patience: 3
+    learning_rate: 0.001
+    weight_decay: 0.0001
+  timesfm:
+    enabled: true
+    model_id: google/timesfm-2.5-200m-pytorch
+    max_context: 1024
+    per_core_batch_size: 32
+    inference_batch_size: 256
+    normalize_inputs: false
+    force_flip_invariance: true
+    infer_is_positive: false
+  chronos:
+    enabled: true
+    model_id: amazon/chronos-t5-tiny
+    num_samples: 20
+    inference_batch_size: 16
+    temperature: 1.0
+    top_k: 50
+    top_p: 1.0
+  chronos2:
+    enabled: true
+    model_id: amazon/chronos-2
+    max_context: 8192
+    inference_batch_size: 64
+    cross_learning: false

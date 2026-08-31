@@ -1,0 +1,20 @@
+cff-version: 1.2.0
+message: "If you use IndusTSFM, please cite this repository."
+title: "IndusTSFM: Industrial Time-Series Foundation Model Adaptation & Generalization"
+version: "0.1.0"
+date-released: "2026-09-01"
+type: software
+license: Apache-2.0
+authors:
+  - name: "IndusTSFM contributors"
+keywords:
+  - time-series forecasting
+  - time-series foundation models
+  - industrial AI
+  - distribution shift
+  - model adaptation
+  - reliability
+abstract: >-
+  A configuration-driven, leakage-aware platform for evaluating and adapting
+  time-series foundation models on industrial multivariate sequences under
+  target-data, device, regime, domain, and compute shifts.

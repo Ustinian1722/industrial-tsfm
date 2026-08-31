@@ -1,0 +1,47 @@
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.pytest_tmp/
+.ruff_cache/
+.mypy_cache/
+.venv/
+*.egg-info/
+.coverage
+coverage.xml
+htmlcov/
+dist/
+build/
+.ipynb_checkpoints/
+*.log
+
+# Local credentials and environment overrides.
+.env
+.env.*
+!.env.example
+
+# Local dataset files are downloaded separately and are not redistributed.
+data/raw/**
+!data/raw/.gitkeep
+
+# Experiment outputs are local artifacts; keep directory placeholders only.
+results/**
+!results/.gitkeep
+*.pt
+*.pth
+*.ckpt
+*.safetensors
+*.npz
+*.npy
+*.parquet
+*.feather
+*.joblib
+*.pickle
+*.pkl
+*.zip
+*.tar
+*.tar.gz
+*.7z
+
+# Local model/cache directories.
+.cache/
+hf_cache/

@@ -1,0 +1,76 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "industrial-tsfm"
+version = "0.1.0"
+description = "IndusTSFM: leakage-aware industrial time-series foundation-model adaptation and generalization"
+readme = "README.md"
+license = { file = "LICENSE" }
+authors = [
+  { name = "IndusTSFM contributors" },
+]
+requires-python = ">=3.10"
+keywords = [
+  "time-series forecasting",
+  "time-series foundation models",
+  "industrial AI",
+  "distribution shift",
+  "model adaptation",
+]
+classifiers = [
+  "Development Status :: 3 - Alpha",
+  "Intended Audience :: Science/Research",
+  "Intended Audience :: Developers",
+  "License :: OSI Approved :: Apache Software License",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.10",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Topic :: Scientific/Engineering :: Artificial Intelligence",
+]
+dependencies = [
+  "numpy>=1.24",
+  "pandas>=2.0",
+  "PyYAML>=6.0",
+  "scikit-learn>=1.3",
+  "torch>=2.1",
+]
+
+[project.optional-dependencies]
+tsfm = [
+  "timesfm==2.0.2",
+  "chronos-forecasting==2.3.1",
+]
+moirai = [
+  "uni2ts==2.0.0",
+]
+peft = [
+  "transformers>=5.3",
+  "accelerate>=1.13",
+  "peft>=0.20,<1",
+]
+dev = [
+  "pytest>=8.0",
+  "ruff>=0.6",
+]
+
+[project.scripts]
+industrial-tsfm = "industrial_tsfm.cli:main"
+industrial-tsfm-adapt = "industrial_tsfm.adapt_cli:main"
+industrial-tsfm-peft = "industrial_tsfm.peft_cli:main"
+industrial-tsfm-cross-regime = "industrial_tsfm.cross_regime_cli:main"
+industrial-tsfm-cross-domain = "industrial_tsfm.cross_domain_cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+pythonpath = ["src"]
+testpaths = ["tests"]
+addopts = "--basetemp=.pytest_tmp"
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
