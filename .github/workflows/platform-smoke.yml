@@ -39,8 +39,11 @@ jobs:
           python-version: "3.11"
           cache: pip
 
-      - name: Install platform development dependencies
-        run: python -m pip install --upgrade pip && python -m pip install -e ".[dev,platform]"
+      - name: Install lightweight platform dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install numpy pandas PyYAML scikit-learn pytest ruff fastapi uvicorn httpx
+          python -m pip install -e . --no-deps
 
       - name: Run platform unit tests
         run: python -m pytest -q tests/test_platform*.py

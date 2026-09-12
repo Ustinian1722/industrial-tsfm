@@ -1,9 +1,9 @@
 from __future__ import annotations
 
 import hashlib
+from collections.abc import Mapping
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Mapping
 
 import pandas as pd
 
@@ -107,8 +107,8 @@ def load_data_source(
 
     provenance.update(
         {
-            "rows": int(len(frame)),
-            "columns": int(len(frame.columns)),
+            "rows": len(frame),
+            "columns": len(frame.columns),
             "column_names": [str(column) for column in frame.columns],
         }
     )

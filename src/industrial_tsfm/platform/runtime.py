@@ -1,7 +1,8 @@
 from __future__ import annotations
 
+from collections.abc import Iterator
 from dataclasses import asdict, dataclass
-from typing import Any, Iterator
+from typing import Any
 
 import pandas as pd
 
@@ -94,10 +95,10 @@ class DataReplayRuntime:
 
         return {
             "schema_version": "industrial_tsfm.replay.v1",
-            "rows": int(len(self.frame)),
+            "rows": len(self.frame),
             "columns": [str(column) for column in self.frame.columns],
-            "batch_size": int(self.config.batch_size),
-            "total_batches": int(total_batches),
+            "batch_size": self.config.batch_size,
+            "total_batches": total_batches,
             "preserves_input_order": True,
             "wall_clock_sleep": False,
             "time": time_summary,

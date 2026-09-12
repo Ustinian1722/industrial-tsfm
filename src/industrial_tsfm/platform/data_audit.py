@@ -1,6 +1,7 @@
 from __future__ import annotations
 
-from typing import Any, Iterable
+from collections.abc import Iterable
+from typing import Any
 
 import numpy as np
 import pandas as pd
@@ -72,7 +73,7 @@ def audit_dataframe(
 ) -> dict[str, Any]:
     """Create a deterministic, JSON-serialisable industrial data-health report.
 
-    The audit is intentionally model agnostic.  It does not impute, resample, or
+    The audit is intentionally model agnostic. It does not impute, resample, or
     silently drop variables; it reports risks and proposes a conservative set of
     numerically usable features for the next pipeline stage.
     """
@@ -175,9 +176,9 @@ def audit_dataframe(
     return {
         "schema_version": "industrial_tsfm.data_audit.v1",
         "summary": {
-            "rows": int(len(frame)),
-            "columns": int(len(frame.columns)),
-            "numeric_columns": int(len(numeric_columns)),
+            "rows": len(frame),
+            "columns": len(frame.columns),
+            "numeric_columns": len(numeric_columns),
             "duplicate_rows": duplicate_rows,
             "readiness_score": round(readiness_score, 2),
         },

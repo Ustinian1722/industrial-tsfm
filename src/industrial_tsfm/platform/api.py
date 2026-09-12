@@ -6,8 +6,11 @@ from typing import Any
 
 from fastapi import FastAPI, HTTPException
 
+from .connectors import ConnectorError, load_data_source
 from .contracts import DataSourceKind, TaskType
+from .data_audit import audit_dataframe
 from .model_catalog import model_catalog
+from .workspace import WorkspaceStore, project_from_dict
 
 
 class ApplicationArtifactStore:
@@ -53,7 +56,7 @@ class ApplicationArtifactStore:
             raise FileNotFoundError(path)
         value = json.loads(path.read_text(encoding="utf-8"))
         if not isinstance(value, dict):
-            raise ValueError(f"expected JSON object in {path}")
+            raise TypeError(f"expected JSON object in {path}")
         return value
 
     def read_artifact(self, application_id: str, filename: str) -> dict[str, Any]:
@@ -92,6 +95,7 @@ def platform_capabilities() -> dict[str, Any]:
         },
         "models": model_catalog(),
         "application_runtime": "offline_replay",
+        "workspace_store": "local_json_v1",
         "agent_orchestration": "not_enabled_in_v1",
     }
 
@@ -107,15 +111,25 @@ def _artifact_or_404(
         raise HTTPException(status_code=404, detail="application artifact not found") from exc
 
 
-def create_app(artifact_root: str | Path = "results") -> FastAPI:
-    """Create the read-only V1 platform API over materialized applications."""
+def create_app(
+    artifact_root: str | Path = "results",
+    workspace_root: str | Path = ".industsfm/workspace",
+) -> FastAPI:
+    """Create the V1 local platform API.
 
-    store = ApplicationArtifactStore(artifact_root)
+    Materialized applications remain read-only. Project specifications and data
+    audit artifacts are writable in the explicit local workspace root. Remote
+    authentication, arbitrary uploads, and live OT control are deliberately out
+    of scope for this V1 service.
+    """
+
+    artifacts = ApplicationArtifactStore(artifact_root)
+    workspace = WorkspaceStore(workspace_root)
     app = FastAPI(
         title="IndusTSFM Industrial Intelligence Platform",
         version="0.1.0",
         description=(
-            "Product API for audited industrial data, validation-only model routing, "
+            "Product API for industrial projects, audited data, validation-only model routing, "
             "anomaly triage, and deterministic application replay."
         ),
     )
@@ -128,29 +142,92 @@ def create_app(artifact_root: str | Path = "results") -> FastAPI:
     def capabilities() -> dict[str, Any]:
         return platform_capabilities()
 
+    @app.get("/v1/projects")
+    def projects() -> dict[str, Any]:
+        rows = workspace.list_projects()
+        return {"count": len(rows), "projects": rows}
+
+    @app.post("/v1/projects", status_code=201)
+    def create_project(payload: dict[str, Any]) -> dict[str, Any]:
+        try:
+            project = project_from_dict(payload)
+            return workspace.create_project(project)
+        except FileExistsError as exc:
+            raise HTTPException(status_code=409, detail="project already exists") from exc
+        except (KeyError, TypeError, ValueError) as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+    @app.get("/v1/projects/{project_id}")
+    def project(project_id: str) -> dict[str, Any]:
+        try:
+            return workspace.get_project_record(project_id)
+        except KeyError as exc:
+            raise HTTPException(status_code=404, detail="project not found") from exc
+
+    @app.post("/v1/projects/{project_id}/audit/{source_name}")
+    def audit_project_source(project_id: str, source_name: str) -> dict[str, Any]:
+        try:
+            spec = workspace.get_project(project_id)
+        except KeyError as exc:
+            raise HTTPException(status_code=404, detail="project not found") from exc
+        matches = [source for source in spec.data_sources if source.name == source_name]
+        if len(matches) != 1:
+            raise HTTPException(status_code=404, detail="data source not found")
+        source = matches[0]
+        if source.kind == DataSourceKind.MEMORY:
+            raise HTTPException(
+                status_code=400,
+                detail="memory sources cannot be loaded through the persisted workspace API",
+            )
+        try:
+            loaded = load_data_source(source)
+        except (ConnectorError, ValueError) as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+        target_columns = tuple(
+            dict.fromkeys(
+                target
+                for task in spec.tasks
+                for target in task.target_columns
+            )
+        )
+        audit = audit_dataframe(
+            loaded.frame,
+            timestamp_column=source.timestamp_column,
+            target_columns=target_columns,
+        )
+        result = {
+            "schema_version": "industrial_tsfm.workspace_audit.v1",
+            "project_id": project_id,
+            "source_name": source.name,
+            "provenance": loaded.provenance,
+            "audit": audit,
+        }
+        workspace.write_derived_artifact(project_id, f"data-audit-{source.name}", result)
+        return result
+
     @app.get("/v1/applications")
     def applications() -> dict[str, Any]:
-        rows = store.list_applications()
+        rows = artifacts.list_applications()
         return {"count": len(rows), "applications": rows}
 
     @app.get("/v1/applications/{application_id}")
     def application(application_id: str) -> dict[str, Any]:
-        return _artifact_or_404(store, application_id, "application.json")
+        return _artifact_or_404(artifacts, application_id, "application.json")
 
     @app.get("/v1/applications/{application_id}/audit")
     def application_audit(application_id: str) -> dict[str, Any]:
-        return _artifact_or_404(store, application_id, "data_audit.json")
+        return _artifact_or_404(artifacts, application_id, "data_audit.json")
 
     @app.get("/v1/applications/{application_id}/route")
     def application_route(application_id: str) -> dict[str, Any]:
-        return _artifact_or_404(store, application_id, "model_route.json")
+        return _artifact_or_404(artifacts, application_id, "model_route.json")
 
     @app.get("/v1/applications/{application_id}/replay")
     def application_replay(application_id: str) -> dict[str, Any]:
-        return _artifact_or_404(store, application_id, "replay_snapshot.json")
+        return _artifact_or_404(artifacts, application_id, "replay_snapshot.json")
 
     @app.get("/v1/applications/{application_id}/anomaly")
     def application_anomaly(application_id: str) -> dict[str, Any]:
-        return _artifact_or_404(store, application_id, "anomaly_result.json")
+        return _artifact_or_404(artifacts, application_id, "anomaly_result.json")
 
     return app
