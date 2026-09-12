@@ -60,13 +60,22 @@ def validation_table_from_payload(payload: dict[str, Any]) -> pd.DataFrame:
     return table
 
 
-def routing_request_from_payload(task_name: str, payload: dict[str, Any]) -> ProductRoutingRequest:
+def routing_request_from_payload(
+    task_name: str,
+    payload: dict[str, Any],
+    *,
+    shift_score_override: float | None = None,
+) -> ProductRoutingRequest:
     route = dict(payload.get("routing", {}))
+    if "shift_score" in route:
+        shift_score = float(route["shift_score"])
+    else:
+        shift_score = float(shift_score_override or 0.0)
     return ProductRoutingRequest(
         task_name=task_name,
         target_data_fraction=float(route.get("target_data_fraction", 0.0)),
         support_windows=route.get("support_windows"),
-        shift_score=float(route.get("shift_score", 0.0)),
+        shift_score=shift_score,
         max_adaptation_seconds=route.get("max_adaptation_seconds"),
         max_parameters=route.get("max_parameters"),
         max_inference_seconds=route.get("max_inference_seconds"),
@@ -75,16 +84,62 @@ def routing_request_from_payload(task_name: str, payload: dict[str, Any]) -> Pro
     )
 
 
+def _distribution_shift_request(config: dict[str, Any]) -> DistributionShiftRequest:
+    features = tuple(str(value) for value in config.get("feature_columns", []))
+    return DistributionShiftRequest(
+        feature_columns=features,
+        reference_fraction=float(config.get("reference_fraction", 0.50)),
+        target_fraction=float(config.get("target_fraction", 0.50)),
+        min_rows_per_partition=int(config.get("min_rows_per_partition", 16)),
+        top_k=int(config.get("top_k", 12)),
+    )
+
+
+def _auto_shift(
+    loaded: LoadedDataSource,
+    audit: dict[str, Any],
+    payload: dict[str, Any],
+) -> tuple[float | None, dict[str, Any] | None]:
+    route = dict(payload.get("routing", {}))
+    if "shift_score" in route or not bool(route.get("auto_shift", False)):
+        return None, None
+    config = dict(payload.get("shift_analysis", {}))
+    analysis = analyze_distribution_shift(
+        loaded.frame,
+        audit,
+        _distribution_shift_request(config),
+    )
+    score = float(analysis["aggregate"]["rms_standardized_mean_shift"])
+    evidence = {
+        "source": "chronological_distribution_shift",
+        "schema_version": analysis["schema_version"],
+        "shift_score": score,
+        "target_labels_used": analysis["target_labels_used"],
+        "reference_scope": analysis["reference_scope"],
+        "target_scope": analysis["target_scope"],
+        "partition": analysis["partition"],
+        "top_features": analysis["features"],
+    }
+    return score, evidence
+
+
 def route_project_forecast(
     project: ProjectSpec,
     source_name: str,
     task_name: str,
     payload: dict[str, Any],
 ) -> dict[str, Any]:
-    _, audit = audit_source(project, source_name)
+    loaded, audit = audit_source(project, source_name)
     validation = validation_table_from_payload(payload)
-    request = routing_request_from_payload(task_name, payload)
-    return route_task(project, validation, audit, request)
+    auto_score, shift_evidence = _auto_shift(loaded, audit, payload)
+    request = routing_request_from_payload(
+        task_name,
+        payload,
+        shift_score_override=auto_score,
+    )
+    result = route_task(project, validation, audit, request)
+    result["shift_evidence"] = shift_evidence
+    return result
 
 
 def materialize_project_application(
@@ -95,7 +150,13 @@ def materialize_project_application(
     output_root: str | Path,
 ) -> PlatformApplication:
     validation = validation_table_from_payload(payload)
-    request = routing_request_from_payload(task_name, payload)
+    loaded, audit = audit_source(project, source_name)
+    auto_score, shift_evidence = _auto_shift(loaded, audit, payload)
+    request = routing_request_from_payload(
+        task_name,
+        payload,
+        shift_score_override=auto_score,
+    )
     replay_batch_size = int(payload.get("replay_batch_size", 32))
     if replay_batch_size <= 0:
         raise ValueError("replay_batch_size must be positive")
@@ -107,6 +168,7 @@ def materialize_project_application(
         routing_request=request,
         replay_batch_size=replay_batch_size,
     )
+    application.model_route["shift_evidence"] = shift_evidence
     output_dir = Path(output_root) / application.application_id
     application.write(output_dir)
     return application
@@ -159,15 +221,7 @@ def run_project_lag_analysis(
 
 
 def shift_request_from_payload(payload: dict[str, Any]) -> DistributionShiftRequest:
-    config = dict(payload.get("analysis", {}))
-    features = tuple(str(value) for value in config.get("feature_columns", []))
-    return DistributionShiftRequest(
-        feature_columns=features,
-        reference_fraction=float(config.get("reference_fraction", 0.50)),
-        target_fraction=float(config.get("target_fraction", 0.50)),
-        min_rows_per_partition=int(config.get("min_rows_per_partition", 16)),
-        top_k=int(config.get("top_k", 12)),
-    )
+    return _distribution_shift_request(dict(payload.get("analysis", {})))
 
 
 def run_project_shift_analysis(
