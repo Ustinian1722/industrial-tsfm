@@ -91,6 +91,18 @@ _DEFAULT_CATALOG = (
         optional_dependency="peft",
         notes="Transformers TimesFM path with LoRA/PEFT support.",
     ),
+    ModelDescriptor(
+        name="pca_spe_product",
+        family="classical_anomaly",
+        task_types=(TaskType.ANOMALY,),
+        training_modes=("train_prefix",),
+        native_multivariate=True,
+        adaptation_modes=("train_prefix_fit", "train_quantile_threshold"),
+        notes=(
+            "Deployment-safe PCA squared prediction error baseline with train-only scaling, "
+            "thresholding, and sensor contribution ranking."
+        ),
+    ),
 )
 
 

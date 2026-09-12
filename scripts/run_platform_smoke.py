@@ -7,6 +7,7 @@ import numpy as np
 import pandas as pd
 
 from industrial_tsfm.platform import (
+    AnomalyDetectionRequest,
     DataSourceKind,
     DataSourceSpec,
     ProductRoutingRequest,
@@ -16,6 +17,7 @@ from industrial_tsfm.platform import (
     build_platform_application,
     build_platform_report,
     model_catalog,
+    run_pca_spe_anomaly_detection,
 )
 
 
@@ -25,6 +27,8 @@ def build_fixture(rows: int = 240) -> pd.DataFrame:
     load = 60 + 8 * np.sin(np.linspace(0, 10, rows)) + rng.normal(0, 1.0, rows)
     temperature = 40 + 0.25 * load + rng.normal(0, 0.8, rows)
     pressure = 2.1 + 0.015 * load + rng.normal(0, 0.03, rows)
+    temperature[200:208] += 12.0
+    pressure[200:208] += 0.8
     target = np.roll(temperature, -1)
     target[-1] = target[-2]
     frame = pd.DataFrame(
@@ -78,10 +82,10 @@ def main() -> None:
         timestamp_column="timestamp",
     )
     project = ProjectSpec(
-        name="Tennessee-style Process Forecast Demo",
+        name="Tennessee-style Process Intelligence Demo",
         description=(
-            "Synthetic process data used only to validate the product-facing data, routing, "
-            "and replay path."
+            "Synthetic process data used only to validate product-facing data audit, model routing, "
+            "anomaly triage, API artifacts, and replay."
         ),
         data_sources=(source,),
         tasks=(
@@ -93,11 +97,17 @@ def main() -> None:
                 horizon=8,
                 business_kpi="keep process temperature inside the operating envelope",
             ),
+            TaskDefinition(
+                name="process-anomaly",
+                task_type=TaskType.ANOMALY,
+                constraints={"feature_columns": ["load", "temperature", "pressure"]},
+                business_kpi="surface abnormal process excursions before operator intervention",
+            ),
         ),
         tags=("platform-smoke", "industrial-ai"),
     )
 
-    application, _ = build_platform_application(
+    application, loaded = build_platform_application(
         project,
         source_name=source.name,
         task_name="temperature-forecast",
@@ -112,6 +122,20 @@ def main() -> None:
         replay_batch_size=32,
     )
     application.write(output_dir)
+    anomaly = run_pca_spe_anomaly_detection(
+        project,
+        loaded.frame,
+        application.data_audit,
+        AnomalyDetectionRequest(
+            task_name="process-anomaly",
+            train_fraction=0.60,
+            threshold_quantile=0.99,
+            min_train_rows=32,
+        ),
+    )
+    (output_dir / "anomaly_result.json").write_text(
+        json.dumps(anomaly, ensure_ascii=False, indent=2), encoding="utf-8"
+    )
     (output_dir / "model_catalog.json").write_text(
         json.dumps(model_catalog(), ensure_ascii=False, indent=2), encoding="utf-8"
     )
@@ -128,6 +152,7 @@ def main() -> None:
     print(f"status={application.status}")
     print(f"selected_model={application.model_route.get('selected_model')}")
     print(f"selected_strategy={application.model_route.get('selected_strategy')}")
+    print(f"anomaly_points={anomaly['summary']['anomaly_points_test']}")
     print(f"replay_batches={application.replay['total_batches']}")
     print(report)
 

@@ -77,7 +77,7 @@ def test_platform_report_renders_project_and_data_health(tmp_path) -> None:
     assert "Industrial Intelligence Platform" in text
     assert "Process demo" in text
     assert "forecast-y" in text
-    assert "Data health" in text
+    assert "Data source &amp; health" in text
 
 
 def test_contracts_reject_invalid_forecasting_task() -> None:

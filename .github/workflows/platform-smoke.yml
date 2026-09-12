@@ -62,12 +62,15 @@ jobs:
           test -s results/platform-smoke/model_route.json
           test -s results/platform-smoke/replay_snapshot.json
           test -s results/platform-smoke/application.json
+          test -s results/platform-smoke/anomaly_result.json
           test -s results/platform-smoke/model_catalog.json
           test -s results/platform-smoke/capabilities.json
           test -s results/platform-smoke/index.html
           grep -q '"target_labels_used": false' results/platform-smoke/model_route.json
           grep -q '"selected_model": "chronos2"' results/platform-smoke/model_route.json
           grep -q '"status": "ready"' results/platform-smoke/application.json
+          grep -q '"model": "pca_spe_product"' results/platform-smoke/anomaly_result.json
+          grep -q '"target_labels_used": false' results/platform-smoke/anomaly_result.json
 
       - name: Upload product demo artifact
         uses: actions/upload-artifact@v4

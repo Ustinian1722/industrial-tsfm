@@ -2,10 +2,11 @@
 
 This package deliberately sits above the research runners. It provides stable
 contracts for projects/tasks, data auditing, model routing, connectors, model
-catalog metadata, and offline application replay without changing the existing
-experiment protocols.
+catalog metadata, anomaly diagnostics, and offline application replay without
+changing the existing experiment protocols.
 """
 
+from .anomaly_engine import AnomalyDetectionRequest, run_pca_spe_anomaly_detection
 from .application import PlatformApplication, build_platform_application
 from .connectors import ConnectorError, LoadedDataSource, load_data_source
 from .contracts import DataSourceKind, DataSourceSpec, ProjectSpec, TaskDefinition, TaskType
@@ -16,6 +17,7 @@ from .report import build_platform_report
 from .runtime import DataReplayRuntime, ReplayBatch, ReplayConfig
 
 __all__ = [
+    "AnomalyDetectionRequest",
     "ConnectorError",
     "DataReplayRuntime",
     "DataSourceKind",
@@ -36,4 +38,5 @@ __all__ = [
     "load_data_source",
     "model_catalog",
     "route_task",
+    "run_pca_spe_anomaly_detection",
 ]

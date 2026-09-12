@@ -29,6 +29,9 @@ class ApplicationArtifactStore:
         for directory in self._application_dirs():
             payload = self._read_json(directory / "application.json")
             payload["artifact_dir"] = str(directory)
+            payload["available_artifacts"] = sorted(
+                path.name for path in directory.iterdir() if path.is_file()
+            )
             rows.append(payload)
         return rows
 
@@ -61,6 +64,7 @@ class ApplicationArtifactStore:
             "data_audit.json",
             "model_route.json",
             "replay_snapshot.json",
+            "anomaly_result.json",
         }
         if filename not in allowed:
             raise ValueError(f"unsupported application artifact: {filename}")
@@ -71,7 +75,10 @@ def platform_capabilities() -> dict[str, Any]:
     return {
         "schema_version": "industrial_tsfm.capabilities.v1",
         "task_types": [task.value for task in TaskType],
-        "implemented_product_routes": [TaskType.FORECASTING.value],
+        "implemented_product_routes": [
+            TaskType.FORECASTING.value,
+            TaskType.ANOMALY.value,
+        ],
         "data_source_contracts": [kind.value for kind in DataSourceKind],
         "implemented_local_connectors": [
             DataSourceKind.CSV.value,
@@ -89,6 +96,17 @@ def platform_capabilities() -> dict[str, Any]:
     }
 
 
+def _artifact_or_404(
+    store: ApplicationArtifactStore,
+    application_id: str,
+    filename: str,
+) -> dict[str, Any]:
+    try:
+        return store.read_artifact(application_id, filename)
+    except (KeyError, FileNotFoundError) as exc:
+        raise HTTPException(status_code=404, detail="application artifact not found") from exc
+
+
 def create_app(artifact_root: str | Path = "results") -> FastAPI:
     """Create the read-only V1 platform API over materialized applications."""
 
@@ -98,7 +116,7 @@ def create_app(artifact_root: str | Path = "results") -> FastAPI:
         version="0.1.0",
         description=(
             "Product API for audited industrial data, validation-only model routing, "
-            "and deterministic application replay."
+            "anomaly triage, and deterministic application replay."
         ),
     )
 
@@ -117,30 +135,22 @@ def create_app(artifact_root: str | Path = "results") -> FastAPI:
 
     @app.get("/v1/applications/{application_id}")
     def application(application_id: str) -> dict[str, Any]:
-        try:
-            return store.read_artifact(application_id, "application.json")
-        except KeyError as exc:
-            raise HTTPException(status_code=404, detail="application not found") from exc
+        return _artifact_or_404(store, application_id, "application.json")
 
     @app.get("/v1/applications/{application_id}/audit")
     def application_audit(application_id: str) -> dict[str, Any]:
-        try:
-            return store.read_artifact(application_id, "data_audit.json")
-        except KeyError as exc:
-            raise HTTPException(status_code=404, detail="application not found") from exc
+        return _artifact_or_404(store, application_id, "data_audit.json")
 
     @app.get("/v1/applications/{application_id}/route")
     def application_route(application_id: str) -> dict[str, Any]:
-        try:
-            return store.read_artifact(application_id, "model_route.json")
-        except KeyError as exc:
-            raise HTTPException(status_code=404, detail="application not found") from exc
+        return _artifact_or_404(store, application_id, "model_route.json")
 
     @app.get("/v1/applications/{application_id}/replay")
     def application_replay(application_id: str) -> dict[str, Any]:
-        try:
-            return store.read_artifact(application_id, "replay_snapshot.json")
-        except KeyError as exc:
-            raise HTTPException(status_code=404, detail="application not found") from exc
+        return _artifact_or_404(store, application_id, "replay_snapshot.json")
+
+    @app.get("/v1/applications/{application_id}/anomaly")
+    def application_anomaly(application_id: str) -> dict[str, Any]:
+        return _artifact_or_404(store, application_id, "anomaly_result.json")
 
     return app

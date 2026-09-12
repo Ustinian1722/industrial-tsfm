@@ -104,11 +104,13 @@ def test_application_orchestrator_materializes_auditable_bundle(tmp_path) -> Non
     json.loads((root / "application.json").read_text(encoding="utf-8"))
 
 
-def test_model_catalog_only_surfaces_implemented_forecasting_adapters() -> None:
+def test_model_catalog_surfaces_forecasting_and_anomaly_adapters() -> None:
     catalog = model_catalog()
     names = {row["name"] for row in catalog}
 
-    assert {"chronos2", "timesfm", "moirai2", "patchtst"}.issubset(names)
+    assert {"chronos2", "timesfm", "moirai2", "patchtst", "pca_spe_product"}.issubset(names)
     assert get_model_descriptor("chronos2").native_multivariate is True
     assert get_model_descriptor("timesfm_transformers").training_modes == ("peft",)
-    assert all(row["task_types"] == ["forecasting"] for row in catalog)
+    assert get_model_descriptor("pca_spe_product").task_types == (TaskType.ANOMALY,)
+    forecasting_rows = [row for row in catalog if row["name"] != "pca_spe_product"]
+    assert all(row["task_types"] == ["forecasting"] for row in forecasting_rows)
