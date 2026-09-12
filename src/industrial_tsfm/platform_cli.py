@@ -13,9 +13,9 @@ def _serve(args: argparse.Namespace) -> None:
             'Platform API dependencies are missing. Install with: pip install -e ".[platform]"'
         ) from exc
 
-    from .platform.api import create_app
+    from .platform.opcua_api import create_live_app
 
-    app = create_app(args.artifact_root, args.workspace_root)
+    app = create_live_app(args.artifact_root, args.workspace_root)
     uvicorn.run(app, host=args.host, port=args.port, reload=args.reload)
 
 
@@ -26,7 +26,17 @@ def _capabilities(_: argparse.Namespace) -> None:
         raise SystemExit(
             'Platform API dependencies are missing. Install with: pip install -e ".[platform]"'
         ) from exc
-    print(json.dumps(platform_capabilities(), indent=2, ensure_ascii=False))
+    payload = platform_capabilities()
+    payload["live_extensions"] = {
+        "opcua": {
+            "status": "read_only_live_v1",
+            "operations": ["browse", "snapshot_read", "subscribe", "runtime_status", "runtime_stop"],
+            "optional_dependency": "industrial-tsfm[opcua]",
+            "writes_enabled": False,
+        },
+        "mqtt": {"status": "contract_only"},
+    }
+    print(json.dumps(payload, indent=2, ensure_ascii=False))
 
 
 def _list_applications(args: argparse.Namespace) -> None:
@@ -44,7 +54,7 @@ def main() -> None:
     parser = argparse.ArgumentParser(description="IndusTSFM industrial platform CLI")
     subparsers = parser.add_subparsers(dest="command", required=True)
 
-    serve = subparsers.add_parser("serve", help="serve the V1 local product API")
+    serve = subparsers.add_parser("serve", help="serve the product API with live extensions")
     serve.add_argument("--artifact-root", default="results")
     serve.add_argument("--workspace-root", default=".industsfm/workspace")
     serve.add_argument("--host", default="127.0.0.1")
