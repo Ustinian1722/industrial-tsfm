@@ -12,6 +12,7 @@ from .connectors import LoadedDataSource, load_data_source
 from .contracts import DataSourceSpec, ProjectSpec
 from .data_audit import audit_dataframe
 from .model_router import ProductRoutingRequest, route_task
+from .shift_analysis import DistributionShiftRequest, analyze_distribution_shift
 
 
 def find_source(project: ProjectSpec, source_name: str) -> DataSourceSpec:
@@ -155,3 +156,25 @@ def run_project_lag_analysis(
     loaded, audit = audit_source(project, source_name)
     request = lag_request_from_payload(payload)
     return analyze_lagged_relationships(loaded.frame, audit, request)
+
+
+def shift_request_from_payload(payload: dict[str, Any]) -> DistributionShiftRequest:
+    config = dict(payload.get("analysis", {}))
+    features = tuple(str(value) for value in config.get("feature_columns", []))
+    return DistributionShiftRequest(
+        feature_columns=features,
+        reference_fraction=float(config.get("reference_fraction", 0.50)),
+        target_fraction=float(config.get("target_fraction", 0.50)),
+        min_rows_per_partition=int(config.get("min_rows_per_partition", 16)),
+        top_k=int(config.get("top_k", 12)),
+    )
+
+
+def run_project_shift_analysis(
+    project: ProjectSpec,
+    source_name: str,
+    payload: dict[str, Any],
+) -> dict[str, Any]:
+    loaded, audit = audit_source(project, source_name)
+    request = shift_request_from_payload(payload)
+    return analyze_distribution_shift(loaded.frame, audit, request)

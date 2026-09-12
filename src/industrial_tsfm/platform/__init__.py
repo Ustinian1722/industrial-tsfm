@@ -16,6 +16,7 @@ from .model_catalog import ModelDescriptor, get_model_descriptor, model_catalog
 from .model_router import ProductRoutingRequest, route_task
 from .report import build_platform_report
 from .runtime import DataReplayRuntime, ReplayBatch, ReplayConfig
+from .shift_analysis import DistributionShiftRequest, analyze_distribution_shift
 
 __all__ = [
     "AnomalyDetectionRequest",
@@ -23,6 +24,7 @@ __all__ = [
     "DataReplayRuntime",
     "DataSourceKind",
     "DataSourceSpec",
+    "DistributionShiftRequest",
     "LagAnalysisRequest",
     "LoadedDataSource",
     "ModelDescriptor",
@@ -33,6 +35,7 @@ __all__ = [
     "ReplayConfig",
     "TaskDefinition",
     "TaskType",
+    "analyze_distribution_shift",
     "analyze_lagged_relationships",
     "audit_dataframe",
     "build_platform_application",
