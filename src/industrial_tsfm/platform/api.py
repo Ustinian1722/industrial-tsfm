@@ -5,6 +5,7 @@ from pathlib import Path
 from typing import Any
 
 from fastapi import FastAPI, HTTPException
+from fastapi.responses import HTMLResponse
 
 from .connectors import ConnectorError, load_data_source
 from .contracts import DataSourceKind, TaskType
@@ -15,6 +16,7 @@ from .services import (
     route_project_forecast,
     run_project_anomaly,
 )
+from .ui import render_dashboard
 from .workspace import WorkspaceStore, project_from_dict
 
 
@@ -101,6 +103,7 @@ def platform_capabilities() -> dict[str, Any]:
         "models": model_catalog(),
         "application_runtime": "offline_replay",
         "workspace_store": "local_json_v1",
+        "dashboard": "server_rendered_v1",
         "agent_orchestration": "not_enabled_in_v1",
     }
 
@@ -151,6 +154,10 @@ def create_app(
             "anomaly triage, and deterministic application replay."
         ),
     )
+
+    @app.get("/", response_class=HTMLResponse)
+    def dashboard() -> str:
+        return render_dashboard()
 
     @app.get("/health")
     def health() -> dict[str, str]:
