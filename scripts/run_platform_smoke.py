@@ -7,18 +7,15 @@ import numpy as np
 import pandas as pd
 
 from industrial_tsfm.platform import (
-    DataReplayRuntime,
     DataSourceKind,
     DataSourceSpec,
     ProductRoutingRequest,
     ProjectSpec,
-    ReplayConfig,
     TaskDefinition,
     TaskType,
-    audit_dataframe,
+    build_platform_application,
     build_platform_report,
-    load_data_source,
-    route_task,
+    model_catalog,
 )
 
 
@@ -71,7 +68,6 @@ def build_validation_table() -> pd.DataFrame:
 def main() -> None:
     output_dir = Path("results/platform-smoke")
     output_dir.mkdir(parents=True, exist_ok=True)
-
     fixture_path = output_dir / "synthetic_process.csv"
     build_fixture().to_csv(fixture_path, index=False)
 
@@ -101,56 +97,38 @@ def main() -> None:
         tags=("platform-smoke", "industrial-ai"),
     )
 
-    loaded = load_data_source(source)
-    audit = audit_dataframe(
-        loaded.frame,
-        timestamp_column=source.timestamp_column,
-        target_columns=("temperature_next",),
-    )
-    validation = build_validation_table()
-    route = route_task(
+    application, _ = build_platform_application(
         project,
-        validation,
-        audit,
-        ProductRoutingRequest(
+        source_name=source.name,
+        task_name="temperature-forecast",
+        validation_table=build_validation_table(),
+        routing_request=ProductRoutingRequest(
             task_name="temperature-forecast",
             target_data_fraction=0.10,
             support_windows=20,
             max_parameters=250_000_000,
             max_inference_seconds=0.05,
         ),
+        replay_batch_size=32,
     )
-    replay = DataReplayRuntime(
-        loaded.frame,
-        ReplayConfig(timestamp_column="timestamp", batch_size=32),
-    ).snapshot(preview_batches=3)
-
-    artifacts = {
-        "project.json": project.to_dict(),
-        "data_provenance.json": loaded.provenance,
-        "data_audit.json": audit,
-        "model_route.json": route,
-        "replay_snapshot.json": replay,
-    }
-    for filename, payload in artifacts.items():
-        (output_dir / filename).write_text(
-            json.dumps(payload, ensure_ascii=False, indent=2, default=str),
-            encoding="utf-8",
-        )
-    validation.to_csv(output_dir / "validation_evidence.csv", index=False)
-
+    application.write(output_dir)
+    (output_dir / "model_catalog.json").write_text(
+        json.dumps(model_catalog(), ensure_ascii=False, indent=2), encoding="utf-8"
+    )
     report = build_platform_report(
         project,
-        audit,
+        application.data_audit,
         output_dir / "index.html",
-        route_decision=route,
-        replay_snapshot=replay,
-        provenance=loaded.provenance,
+        route_decision=application.model_route,
+        replay_snapshot=application.replay,
+        provenance=application.source_provenance,
     )
-    print(f"readiness={audit['summary']['readiness_score']}")
-    print(f"selected_model={route.get('selected_model')}")
-    print(f"selected_strategy={route.get('selected_strategy')}")
-    print(f"replay_batches={replay['total_batches']}")
+
+    print(f"application={application.application_id}")
+    print(f"status={application.status}")
+    print(f"selected_model={application.model_route.get('selected_model')}")
+    print(f"selected_strategy={application.model_route.get('selected_strategy')}")
+    print(f"replay_batches={application.replay['total_batches']}")
     print(report)
 
 
