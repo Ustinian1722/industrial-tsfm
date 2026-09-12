@@ -1,0 +1,65 @@
+name: OPC-UA Smoke
+
+on:
+  push:
+    paths:
+      - "src/industrial_tsfm/platform/opcua.py"
+      - "src/industrial_tsfm/platform/runtime.py"
+      - "src/industrial_tsfm/platform/__init__.py"
+      - "scripts/run_opcua_smoke.py"
+      - "tests/test_platform_opcua.py"
+      - "pyproject.toml"
+      - ".github/workflows/opcua-smoke.yml"
+  pull_request:
+    paths:
+      - "src/industrial_tsfm/platform/opcua.py"
+      - "src/industrial_tsfm/platform/runtime.py"
+      - "src/industrial_tsfm/platform/__init__.py"
+      - "scripts/run_opcua_smoke.py"
+      - "tests/test_platform_opcua.py"
+      - "pyproject.toml"
+      - ".github/workflows/opcua-smoke.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  opcua-smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install OPC-UA platform dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install numpy pandas PyYAML scikit-learn pytest asyncua
+          python -m pip install -e . --no-deps
+
+      - name: Run OPC-UA unit tests
+        run: python -m pytest -q tests/test_platform_opcua.py
+
+      - name: Run real asyncua server/client smoke
+        run: python scripts/run_opcua_smoke.py
+
+      - name: Verify smoke artifacts
+        run: |
+          test -s results/opcua-smoke/browse.json
+          test -s results/opcua-smoke/snapshot.json
+          grep -q '"good_count": 2' results/opcua-smoke/snapshot.json
+          grep -q '"authentication": "anonymous"' results/opcua-smoke/snapshot.json
+
+      - name: Upload OPC-UA smoke artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: industsfm-opcua-smoke
+          path: results/opcua-smoke/
+          if-no-files-found: error
+          retention-days: 14
