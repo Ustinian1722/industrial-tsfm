@@ -26,6 +26,7 @@ from .opcua import (
     public_connection_metadata as opcua_public_connection_metadata,
     read_opcua_snapshot,
 )
+from .opcua_runtime import OPCUALiveRuntime, OPCUALiveState
 from .report import build_platform_report
 from .runtime import BoundedLiveBuffer, DataReplayRuntime, LiveSample, ReplayBatch, ReplayConfig
 from .shift_analysis import (
@@ -50,6 +51,8 @@ __all__ = [
     "ModelDescriptor",
     "OPCUAConnectionConfig",
     "OPCUAConnectorError",
+    "OPCUALiveRuntime",
+    "OPCUALiveState",
     "OPCUASample",
     "OPCUATag",
     "PlatformApplication",

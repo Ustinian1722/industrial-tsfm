@@ -4,6 +4,7 @@ on:
   push:
     paths:
       - "src/industrial_tsfm/platform/opcua.py"
+      - "src/industrial_tsfm/platform/opcua_runtime.py"
       - "src/industrial_tsfm/platform/runtime.py"
       - "src/industrial_tsfm/platform/__init__.py"
       - "scripts/run_opcua_smoke.py"
@@ -13,6 +14,7 @@ on:
   pull_request:
     paths:
       - "src/industrial_tsfm/platform/opcua.py"
+      - "src/industrial_tsfm/platform/opcua_runtime.py"
       - "src/industrial_tsfm/platform/runtime.py"
       - "src/industrial_tsfm/platform/__init__.py"
       - "scripts/run_opcua_smoke.py"
@@ -53,8 +55,12 @@ jobs:
         run: |
           test -s results/opcua-smoke/browse.json
           test -s results/opcua-smoke/snapshot.json
+          test -s results/opcua-smoke/live_runtime.json
           grep -q '"good_count": 2' results/opcua-smoke/snapshot.json
           grep -q '"authentication": "anonymous"' results/opcua-smoke/snapshot.json
+          grep -q '"read_only": true' results/opcua-smoke/live_runtime.json
+          grep -q '"writes_enabled": false' results/opcua-smoke/live_runtime.json
+          grep -q '"status": "stopped"' results/opcua-smoke/live_runtime.json
 
       - name: Upload OPC-UA smoke artifact
         uses: actions/upload-artifact@v4

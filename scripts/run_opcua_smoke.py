@@ -9,6 +9,7 @@ from asyncua import Server
 from industrial_tsfm.platform import (
     DataSourceKind,
     DataSourceSpec,
+    OPCUALiveRuntime,
     browse_opcua_source,
     read_opcua_snapshot,
 )
@@ -44,7 +45,8 @@ async def main() -> None:
                 },
                 "max_browse_depth": 2,
                 "max_browse_nodes": 32,
-                "sampling_interval_ms": 250,
+                "sampling_interval_ms": 100,
+                "max_buffer_rows": 64,
             },
         )
         browse = await browse_opcua_source(source)
@@ -64,9 +66,33 @@ async def main() -> None:
             raise RuntimeError("temperature value mismatch")
         if abs(float(values["pressure"]) - 2.15) > 1.0e-6:
             raise RuntimeError("pressure value mismatch")
+
+        live = OPCUALiveRuntime(source, reconnect_initial_seconds=0.1, reconnect_max_seconds=0.5)
+        stop_event = asyncio.Event()
+        task = asyncio.create_task(live.run(stop_event))
+        await asyncio.sleep(0.4)
+        await temperature.write_value(43.25)
+        await pressure.write_value(2.25)
+        await asyncio.sleep(0.4)
+        await temperature.write_value(44.0)
+        await asyncio.sleep(0.4)
+        stop_event.set()
+        await asyncio.wait_for(task, timeout=3.0)
+        live_snapshot = live.snapshot()
+        (output_dir / "live_runtime.json").write_text(
+            json.dumps(live_snapshot, ensure_ascii=False, indent=2, default=str), encoding="utf-8"
+        )
+        if live_snapshot["state"]["samples_received"] < 3:
+            raise RuntimeError("OPC-UA subscription did not receive expected data changes")
+        if live_snapshot["buffer"]["buffered_rows"] < 3:
+            raise RuntimeError("live buffer did not preserve subscription samples")
+        if live_snapshot["read_only"] is not True or live_snapshot["writes_enabled"] is not False:
+            raise RuntimeError("live product runtime must remain read-only")
+
         print(f"endpoint={endpoint}")
         print(f"browse_count={browse['count']}")
         print(f"good_samples={snapshot['good_count']}")
+        print(f"subscription_samples={live_snapshot['state']['samples_received']}")
     finally:
         await server.stop()
 
