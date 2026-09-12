@@ -4,18 +4,22 @@ on:
   push:
     paths:
       - "src/industrial_tsfm/platform/**"
+      - "src/industrial_tsfm/platform_cli.py"
       - "src/industrial_tsfm/adaptation_engine.py"
       - "src/industrial_tsfm/selection.py"
       - "scripts/run_platform_smoke.py"
       - "tests/test_platform*.py"
+      - "pyproject.toml"
       - ".github/workflows/platform-smoke.yml"
   pull_request:
     paths:
       - "src/industrial_tsfm/platform/**"
+      - "src/industrial_tsfm/platform_cli.py"
       - "src/industrial_tsfm/adaptation_engine.py"
       - "src/industrial_tsfm/selection.py"
       - "scripts/run_platform_smoke.py"
       - "tests/test_platform*.py"
+      - "pyproject.toml"
       - ".github/workflows/platform-smoke.yml"
   workflow_dispatch:
 
@@ -35,14 +39,19 @@ jobs:
           python-version: "3.11"
           cache: pip
 
-      - name: Install development dependencies
-        run: python -m pip install --upgrade pip && python -m pip install -e ".[dev]"
+      - name: Install platform development dependencies
+        run: python -m pip install --upgrade pip && python -m pip install -e ".[dev,platform]"
 
       - name: Run platform unit tests
         run: python -m pytest -q tests/test_platform*.py
 
       - name: Run platform smoke build
         run: python scripts/run_platform_smoke.py
+
+      - name: Verify CLI and API imports
+        run: |
+          industrial-tsfm-platform capabilities > results/platform-smoke/capabilities.json
+          python -c "from industrial_tsfm.platform.api import create_app; create_app('results/platform-smoke')"
 
       - name: Verify generated artifacts
         run: |
@@ -54,6 +63,7 @@ jobs:
           test -s results/platform-smoke/replay_snapshot.json
           test -s results/platform-smoke/application.json
           test -s results/platform-smoke/model_catalog.json
+          test -s results/platform-smoke/capabilities.json
           test -s results/platform-smoke/index.html
           grep -q '"target_labels_used": false' results/platform-smoke/model_route.json
           grep -q '"selected_model": "chronos2"' results/platform-smoke/model_route.json

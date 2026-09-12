@@ -51,6 +51,11 @@ peft = [
   "accelerate>=1.13",
   "peft>=0.20,<1",
 ]
+platform = [
+  "fastapi>=0.115,<1",
+  "uvicorn>=0.30,<1",
+  "httpx>=0.27,<1",
+]
 dev = [
   "pytest>=8.0",
   "ruff>=0.6",
@@ -62,6 +67,7 @@ industrial-tsfm-adapt = "industrial_tsfm.adapt_cli:main"
 industrial-tsfm-peft = "industrial_tsfm.peft_cli:main"
 industrial-tsfm-cross-regime = "industrial_tsfm.cross_regime_cli:main"
 industrial-tsfm-cross-domain = "industrial_tsfm.cross_domain_cli:main"
+industrial-tsfm-platform = "industrial_tsfm.platform_cli:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]
