@@ -13,7 +13,12 @@ from .contracts import DataSourceSpec, ProjectSpec
 from .data_audit import audit_dataframe
 from .feature_discovery import VariableDiscoveryRequest, discover_variables
 from .model_router import ProductRoutingRequest, route_task
-from .shift_analysis import DistributionShiftRequest, analyze_distribution_shift
+from .shift_analysis import (
+    CrossSourceShiftRequest,
+    DistributionShiftRequest,
+    analyze_distribution_shift,
+    compare_source_distributions,
+)
 
 
 def find_source(project: ProjectSpec, source_name: str) -> DataSourceSpec:
@@ -92,6 +97,14 @@ def _distribution_shift_request(config: dict[str, Any]) -> DistributionShiftRequ
         reference_fraction=float(config.get("reference_fraction", 0.50)),
         target_fraction=float(config.get("target_fraction", 0.50)),
         min_rows_per_partition=int(config.get("min_rows_per_partition", 16)),
+        top_k=int(config.get("top_k", 12)),
+    )
+
+
+def _cross_source_shift_request(config: dict[str, Any]) -> CrossSourceShiftRequest:
+    return CrossSourceShiftRequest(
+        feature_columns=tuple(str(value) for value in config.get("feature_columns", [])),
+        min_rows_per_source=int(config.get("min_rows_per_source", 16)),
         top_k=int(config.get("top_k", 12)),
     )
 
@@ -233,6 +246,27 @@ def run_project_shift_analysis(
     loaded, audit = audit_source(project, source_name)
     request = shift_request_from_payload(payload)
     return analyze_distribution_shift(loaded.frame, audit, request)
+
+
+def run_project_cross_source_shift(
+    project: ProjectSpec,
+    reference_source_name: str,
+    target_source_name: str,
+    payload: dict[str, Any],
+) -> dict[str, Any]:
+    reference_loaded, reference_audit = audit_source(project, reference_source_name)
+    target_loaded, target_audit = audit_source(project, target_source_name)
+    request = _cross_source_shift_request(dict(payload.get("analysis", {})))
+    result = compare_source_distributions(
+        reference_loaded.frame,
+        target_loaded.frame,
+        reference_audit,
+        target_audit,
+        request,
+    )
+    result["reference_source_name"] = reference_source_name
+    result["target_source_name"] = target_source_name
+    return result
 
 
 def variable_discovery_request_from_payload(payload: dict[str, Any]) -> VariableDiscoveryRequest:

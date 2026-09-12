@@ -17,11 +17,17 @@ from .model_catalog import ModelDescriptor, get_model_descriptor, model_catalog
 from .model_router import ProductRoutingRequest, route_task
 from .report import build_platform_report
 from .runtime import DataReplayRuntime, ReplayBatch, ReplayConfig
-from .shift_analysis import DistributionShiftRequest, analyze_distribution_shift
+from .shift_analysis import (
+    CrossSourceShiftRequest,
+    DistributionShiftRequest,
+    analyze_distribution_shift,
+    compare_source_distributions,
+)
 
 __all__ = [
     "AnomalyDetectionRequest",
     "ConnectorError",
+    "CrossSourceShiftRequest",
     "DataReplayRuntime",
     "DataSourceKind",
     "DataSourceSpec",
@@ -42,6 +48,7 @@ __all__ = [
     "audit_dataframe",
     "build_platform_application",
     "build_platform_report",
+    "compare_source_distributions",
     "discover_variables",
     "get_model_descriptor",
     "load_data_source",

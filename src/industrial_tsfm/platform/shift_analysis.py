@@ -9,13 +9,7 @@ import pandas as pd
 
 @dataclass(frozen=True)
 class DistributionShiftRequest:
-    """Chronological source-to-target shift analysis over one audited table.
-
-    The reference partition is always the earliest prefix of the table and the
-    target partition is always the latest suffix. The two partitions must not
-    overlap. Only feature distributions are compared; target labels are excluded
-    by default when the audit declares them.
-    """
+    """Chronological source-to-target shift analysis over one audited table."""
 
     feature_columns: tuple[str, ...] = ()
     reference_fraction: float = 0.50
@@ -36,6 +30,21 @@ class DistributionShiftRequest:
             raise ValueError("top_k must be positive")
 
 
+@dataclass(frozen=True)
+class CrossSourceShiftRequest:
+    """Distribution-shift request for two explicitly different data sources."""
+
+    feature_columns: tuple[str, ...] = ()
+    min_rows_per_source: int = 16
+    top_k: int = 12
+
+    def validate(self) -> None:
+        if self.min_rows_per_source < 4:
+            raise ValueError("min_rows_per_source must be at least 4")
+        if self.top_k < 1:
+            raise ValueError("top_k must be positive")
+
+
 def _default_features(data_audit: dict[str, Any]) -> list[str]:
     targets = set(data_audit.get("targets", {}).get("configured", []))
     return [
@@ -45,6 +54,15 @@ def _default_features(data_audit: dict[str, Any]) -> list[str]:
     ]
 
 
+def _common_default_features(
+    reference_audit: dict[str, Any],
+    target_audit: dict[str, Any],
+) -> list[str]:
+    reference = _default_features(reference_audit)
+    target = set(_default_features(target_audit))
+    return [feature for feature in reference if feature in target]
+
+
 def _finite_values(frame: pd.DataFrame, column: str) -> np.ndarray:
     if column not in frame.columns:
         raise ValueError(f"column {column!r} is missing")
@@ -52,47 +70,18 @@ def _finite_values(frame: pd.DataFrame, column: str) -> np.ndarray:
     return values[np.isfinite(values)]
 
 
-def analyze_distribution_shift(
-    frame: pd.DataFrame,
-    data_audit: dict[str, Any],
-    request: DistributionShiftRequest,
-) -> dict[str, Any]:
-    """Compare early-reference and late-target feature distributions.
-
-    The primary score is the RMS source-standardized mean shift, matching the
-    convention already consumed by the adaptation engine. Dispersion change is
-    reported separately so routing can remain transparent rather than hiding a
-    composite heuristic inside the score.
-    """
-
-    request.validate()
-    if frame.empty:
-        raise ValueError("cannot analyze an empty dataframe")
-
-    row_count = len(frame)
-    reference_rows = int(np.floor(row_count * request.reference_fraction))
-    target_rows = int(np.floor(row_count * request.target_fraction))
-    if reference_rows < request.min_rows_per_partition:
-        raise ValueError("reference partition has too few rows")
-    if target_rows < request.min_rows_per_partition:
-        raise ValueError("target partition has too few rows")
-    if reference_rows + target_rows > row_count:
-        raise ValueError("reference and target partitions overlap")
-
-    reference = frame.iloc[:reference_rows]
-    target = frame.iloc[row_count - target_rows :]
-
-    features = list(request.feature_columns) if request.feature_columns else _default_features(data_audit)
-    if not features:
-        raise ValueError("no feature columns are available for distribution-shift analysis")
-
+def _summarize_feature_shift(
+    reference: pd.DataFrame,
+    target: pd.DataFrame,
+    features: list[str],
+    min_rows: int,
+    top_k: int,
+) -> tuple[list[dict[str, Any]], dict[str, float]]:
     rows: list[dict[str, Any]] = []
     for feature in features:
         source_values = _finite_values(reference, feature)
         target_values = _finite_values(target, feature)
-        if len(source_values) < request.min_rows_per_partition:
-            continue
-        if len(target_values) < request.min_rows_per_partition:
+        if len(source_values) < min_rows or len(target_values) < min_rows:
             continue
 
         source_mean = float(source_values.mean())
@@ -139,6 +128,57 @@ def analyze_distribution_shift(
     log_std = np.asarray([float(item["abs_log_std_ratio"]) for item in rows], dtype=np.float64)
     robust = np.asarray([float(item["robust_median_shift"]) for item in rows], dtype=np.float64)
     rms_shift = float(np.sqrt(np.mean(np.square(standardized))))
+    aggregate = {
+        "mean_abs_standardized_mean_shift": float(standardized.mean()),
+        "rms_standardized_mean_shift": rms_shift,
+        "max_abs_standardized_mean_shift": float(standardized.max()),
+        "mean_abs_log_std_ratio": float(log_std.mean()),
+        "max_abs_log_std_ratio": float(log_std.max()),
+        "mean_robust_median_shift": float(robust.mean()),
+        "max_robust_median_shift": float(robust.max()),
+        "shift_score": rms_shift,
+    }
+    return rows[:top_k], aggregate
+
+
+def analyze_distribution_shift(
+    frame: pd.DataFrame,
+    data_audit: dict[str, Any],
+    request: DistributionShiftRequest,
+) -> dict[str, Any]:
+    """Compare early-reference and late-target feature distributions.
+
+    The primary score is the RMS source-standardized mean shift, matching the
+    convention already consumed by the adaptation engine. Dispersion change is
+    reported separately so routing can remain transparent.
+    """
+
+    request.validate()
+    if frame.empty:
+        raise ValueError("cannot analyze an empty dataframe")
+
+    row_count = len(frame)
+    reference_rows = int(np.floor(row_count * request.reference_fraction))
+    target_rows = int(np.floor(row_count * request.target_fraction))
+    if reference_rows < request.min_rows_per_partition:
+        raise ValueError("reference partition has too few rows")
+    if target_rows < request.min_rows_per_partition:
+        raise ValueError("target partition has too few rows")
+    if reference_rows + target_rows > row_count:
+        raise ValueError("reference and target partitions overlap")
+
+    reference = frame.iloc[:reference_rows]
+    target = frame.iloc[row_count - target_rows :]
+    features = list(request.feature_columns) if request.feature_columns else _default_features(data_audit)
+    if not features:
+        raise ValueError("no feature columns are available for distribution-shift analysis")
+    feature_rows, aggregate = _summarize_feature_shift(
+        reference,
+        target,
+        features,
+        request.min_rows_per_partition,
+        request.top_k,
+    )
 
     return {
         "schema_version": "industrial_tsfm.distribution_shift.v1",
@@ -156,15 +196,49 @@ def analyze_distribution_shift(
             "target_row_end": row_count,
             "gap_rows": row_count - reference_rows - target_rows,
         },
-        "aggregate": {
-            "mean_abs_standardized_mean_shift": float(standardized.mean()),
-            "rms_standardized_mean_shift": rms_shift,
-            "max_abs_standardized_mean_shift": float(standardized.max()),
-            "mean_abs_log_std_ratio": float(log_std.mean()),
-            "max_abs_log_std_ratio": float(log_std.max()),
-            "mean_robust_median_shift": float(robust.mean()),
-            "max_robust_median_shift": float(robust.max()),
-            "shift_score": rms_shift,
+        "aggregate": aggregate,
+        "features": feature_rows,
+    }
+
+
+def compare_source_distributions(
+    reference_frame: pd.DataFrame,
+    target_frame: pd.DataFrame,
+    reference_audit: dict[str, Any],
+    target_audit: dict[str, Any],
+    request: CrossSourceShiftRequest,
+) -> dict[str, Any]:
+    """Compare feature drift between an explicit reference and target data source."""
+
+    request.validate()
+    if reference_frame.empty or target_frame.empty:
+        raise ValueError("reference and target data sources must both be non-empty")
+    features = (
+        list(request.feature_columns)
+        if request.feature_columns
+        else _common_default_features(reference_audit, target_audit)
+    )
+    if not features:
+        raise ValueError("reference and target sources have no common usable feature columns")
+    feature_rows, aggregate = _summarize_feature_shift(
+        reference_frame,
+        target_frame,
+        features,
+        request.min_rows_per_source,
+        request.top_k,
+    )
+    return {
+        "schema_version": "industrial_tsfm.cross_source_shift.v1",
+        "analysis_type": "cross_source_distribution_shift",
+        "reference_scope": "explicit_reference_source",
+        "target_scope": "explicit_target_source",
+        "target_labels_used": False,
+        "reference_statistics_use_target_data": False,
+        "request": asdict(request),
+        "partition": {
+            "reference_rows": len(reference_frame),
+            "target_rows": len(target_frame),
         },
-        "features": rows[: request.top_k],
+        "aggregate": aggregate,
+        "features": feature_rows,
     }

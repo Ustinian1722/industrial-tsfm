@@ -15,6 +15,7 @@ from .services import (
     materialize_project_application,
     route_project_forecast,
     run_project_anomaly,
+    run_project_cross_source_shift,
     run_project_lag_analysis,
     run_project_shift_analysis,
     run_project_variable_discovery,
@@ -95,6 +96,7 @@ def platform_capabilities() -> dict[str, Any]:
         "analytics": [
             "lagged_association",
             "chronological_distribution_shift",
+            "cross_source_distribution_shift",
             "variable_candidate_discovery",
         ],
         "data_source_contracts": [kind.value for kind in DataSourceKind],
@@ -134,11 +136,15 @@ def _project_or_404(workspace: WorkspaceStore, project_id: str):
         raise HTTPException(status_code=404, detail="project not found") from exc
 
 
-def _source_name(payload: dict[str, Any]) -> str:
-    name = str(payload.get("source_name", "")).strip()
+def _required_name(payload: dict[str, Any], key: str) -> str:
+    name = str(payload.get(key, "")).strip()
     if not name:
-        raise HTTPException(status_code=422, detail="source_name is required")
+        raise HTTPException(status_code=422, detail=f"{key} is required")
     return name
+
+
+def _source_name(payload: dict[str, Any]) -> str:
+    return _required_name(payload, "source_name")
 
 
 def create_app(
@@ -254,6 +260,29 @@ def create_app(
         except (ConnectorError, TypeError, ValueError) as exc:
             raise HTTPException(status_code=422, detail=str(exc)) from exc
         workspace.write_derived_artifact(project_id, "distribution-shift", result)
+        return result
+
+    @app.post("/v1/projects/{project_id}/analysis/shift-sources")
+    def cross_source_shift(project_id: str, payload: dict[str, Any]) -> dict[str, Any]:
+        spec = _project_or_404(workspace, project_id)
+        reference_name = _required_name(payload, "reference_source_name")
+        target_name = _required_name(payload, "target_source_name")
+        try:
+            result = run_project_cross_source_shift(
+                spec,
+                reference_name,
+                target_name,
+                payload,
+            )
+        except KeyError as exc:
+            raise HTTPException(status_code=404, detail="project source not found") from exc
+        except (ConnectorError, TypeError, ValueError) as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
+        workspace.write_derived_artifact(
+            project_id,
+            f"cross-source-shift-{reference_name}-{target_name}",
+            result,
+        )
         return result
 
     @app.post("/v1/projects/{project_id}/analysis/discover")
