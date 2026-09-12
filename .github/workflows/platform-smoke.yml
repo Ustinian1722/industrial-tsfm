@@ -4,14 +4,18 @@ on:
   push:
     paths:
       - "src/industrial_tsfm/platform/**"
+      - "src/industrial_tsfm/adaptation_engine.py"
+      - "src/industrial_tsfm/selection.py"
       - "scripts/run_platform_smoke.py"
-      - "tests/test_platform.py"
+      - "tests/test_platform*.py"
       - ".github/workflows/platform-smoke.yml"
   pull_request:
     paths:
       - "src/industrial_tsfm/platform/**"
+      - "src/industrial_tsfm/adaptation_engine.py"
+      - "src/industrial_tsfm/selection.py"
       - "scripts/run_platform_smoke.py"
-      - "tests/test_platform.py"
+      - "tests/test_platform*.py"
       - ".github/workflows/platform-smoke.yml"
   workflow_dispatch:
 
@@ -35,7 +39,7 @@ jobs:
         run: python -m pip install --upgrade pip && python -m pip install -e ".[dev]"
 
       - name: Run platform unit tests
-        run: python -m pytest -q tests/test_platform.py
+        run: python -m pytest -q tests/test_platform.py tests/test_platform_product.py
 
       - name: Run platform smoke build
         run: python scripts/run_platform_smoke.py
@@ -43,8 +47,14 @@ jobs:
       - name: Verify generated artifacts
         run: |
           test -s results/platform-smoke/project.json
+          test -s results/platform-smoke/data_provenance.json
           test -s results/platform-smoke/data_audit.json
+          test -s results/platform-smoke/validation_evidence.csv
+          test -s results/platform-smoke/model_route.json
+          test -s results/platform-smoke/replay_snapshot.json
           test -s results/platform-smoke/index.html
+          grep -q '"target_labels_used": false' results/platform-smoke/model_route.json
+          grep -q '"selected_model": "chronos2"' results/platform-smoke/model_route.json
 
       - name: Upload product demo artifact
         uses: actions/upload-artifact@v4

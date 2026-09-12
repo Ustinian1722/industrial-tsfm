@@ -7,13 +7,18 @@ import numpy as np
 import pandas as pd
 
 from industrial_tsfm.platform import (
+    DataReplayRuntime,
     DataSourceKind,
     DataSourceSpec,
+    ProductRoutingRequest,
     ProjectSpec,
+    ReplayConfig,
     TaskDefinition,
     TaskType,
     audit_dataframe,
     build_platform_report,
+    load_data_source,
+    route_task,
 )
 
 
@@ -39,20 +44,50 @@ def build_fixture(rows: int = 240) -> pd.DataFrame:
     return frame
 
 
+def build_validation_table() -> pd.DataFrame:
+    rows: list[dict[str, object]] = []
+    profiles = {
+        "chronos2": (0.46, 0.015, 120_000_000, "frozen"),
+        "timesfm": (0.49, 0.021, 231_000_000, "frozen"),
+        "patchtst": (0.53, 0.006, 70_000, "supervised"),
+    }
+    for model, (metric, latency, parameters, mode) in profiles.items():
+        for seed, delta in enumerate((0.0, 0.01, -0.006)):
+            rows.append(
+                {
+                    "model": model,
+                    "seed": seed,
+                    "status": "complete",
+                    "normalized_rmse": metric + delta,
+                    "fit_seconds": 0.0 if mode == "frozen" else 1.2,
+                    "inference_seconds": latency,
+                    "total_parameters": parameters,
+                    "training_mode": mode,
+                }
+            )
+    return pd.DataFrame(rows)
+
+
 def main() -> None:
     output_dir = Path("results/platform-smoke")
     output_dir.mkdir(parents=True, exist_ok=True)
 
+    fixture_path = output_dir / "synthetic_process.csv"
+    build_fixture().to_csv(fixture_path, index=False)
+
+    source = DataSourceSpec(
+        name="synthetic-process",
+        kind=DataSourceKind.CSV,
+        location=str(fixture_path),
+        timestamp_column="timestamp",
+    )
     project = ProjectSpec(
         name="Tennessee-style Process Forecast Demo",
-        description="Synthetic process data used only to validate the product-facing platform path.",
-        data_sources=(
-            DataSourceSpec(
-                name="synthetic-process",
-                kind=DataSourceKind.MEMORY,
-                timestamp_column="timestamp",
-            ),
+        description=(
+            "Synthetic process data used only to validate the product-facing data, routing, "
+            "and replay path."
         ),
+        data_sources=(source,),
         tasks=(
             TaskDefinition(
                 name="temperature-forecast",
@@ -66,23 +101,56 @@ def main() -> None:
         tags=("platform-smoke", "industrial-ai"),
     )
 
-    frame = build_fixture()
+    loaded = load_data_source(source)
     audit = audit_dataframe(
-        frame,
-        timestamp_column="timestamp",
+        loaded.frame,
+        timestamp_column=source.timestamp_column,
         target_columns=("temperature_next",),
     )
-    (output_dir / "project.json").write_text(
-        json.dumps(project.to_dict(), ensure_ascii=False, indent=2, default=str),
-        encoding="utf-8",
+    validation = build_validation_table()
+    route = route_task(
+        project,
+        validation,
+        audit,
+        ProductRoutingRequest(
+            task_name="temperature-forecast",
+            target_data_fraction=0.10,
+            support_windows=20,
+            max_parameters=250_000_000,
+            max_inference_seconds=0.05,
+        ),
     )
-    (output_dir / "data_audit.json").write_text(
-        json.dumps(audit, ensure_ascii=False, indent=2),
-        encoding="utf-8",
+    replay = DataReplayRuntime(
+        loaded.frame,
+        ReplayConfig(timestamp_column="timestamp", batch_size=32),
+    ).snapshot(preview_batches=3)
+
+    artifacts = {
+        "project.json": project.to_dict(),
+        "data_provenance.json": loaded.provenance,
+        "data_audit.json": audit,
+        "model_route.json": route,
+        "replay_snapshot.json": replay,
+    }
+    for filename, payload in artifacts.items():
+        (output_dir / filename).write_text(
+            json.dumps(payload, ensure_ascii=False, indent=2, default=str),
+            encoding="utf-8",
+        )
+    validation.to_csv(output_dir / "validation_evidence.csv", index=False)
+
+    report = build_platform_report(
+        project,
+        audit,
+        output_dir / "index.html",
+        route_decision=route,
+        replay_snapshot=replay,
+        provenance=loaded.provenance,
     )
-    report = build_platform_report(project, audit, output_dir / "index.html")
     print(f"readiness={audit['summary']['readiness_score']}")
-    print(f"usable_features={len(audit['usable_numeric_features'])}")
+    print(f"selected_model={route.get('selected_model')}")
+    print(f"selected_strategy={route.get('selected_strategy')}")
+    print(f"replay_batches={replay['total_batches']}")
     print(report)
 
 

@@ -23,6 +23,16 @@ class DataSourceKind(str, Enum):
     MEMORY = "memory"
 
 
+def _jsonable(value: Any) -> Any:
+    if isinstance(value, Enum):
+        return value.value
+    if isinstance(value, dict):
+        return {str(key): _jsonable(item) for key, item in value.items()}
+    if isinstance(value, (tuple, list)):
+        return [_jsonable(item) for item in value]
+    return value
+
+
 @dataclass(frozen=True)
 class DataSourceSpec:
     name: str
@@ -75,6 +85,12 @@ class ProjectSpec:
             raise ValueError("project requires at least one data source")
         if not self.tasks:
             raise ValueError("project requires at least one task")
+        source_names = [source.name for source in self.data_sources]
+        task_names = [task.name for task in self.tasks]
+        if len(set(source_names)) != len(source_names):
+            raise ValueError("data source names must be unique within a project")
+        if len(set(task_names)) != len(task_names):
+            raise ValueError("task names must be unique within a project")
         for source in self.data_sources:
             source.validate()
         for task in self.tasks:
@@ -82,4 +98,4 @@ class ProjectSpec:
 
     def to_dict(self) -> dict[str, Any]:
         self.validate()
-        return asdict(self)
+        return _jsonable(asdict(self))
