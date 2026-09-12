@@ -1,11 +1,12 @@
 """Product-facing platform primitives for IndusTSFM.
 
 This package deliberately sits above the research runners. It provides stable
-contracts for projects/tasks, data auditing, model routing, connectors, model
-catalog metadata, anomaly diagnostics, and offline application replay without
-changing the existing experiment protocols.
+contracts for projects/tasks, data auditing, analytics, model routing,
+connectors, model catalog metadata, anomaly diagnostics, and offline
+application replay without changing the existing experiment protocols.
 """
 
+from .analytics import LagAnalysisRequest, analyze_lagged_relationships
 from .anomaly_engine import AnomalyDetectionRequest, run_pca_spe_anomaly_detection
 from .application import PlatformApplication, build_platform_application
 from .connectors import ConnectorError, LoadedDataSource, load_data_source
@@ -22,6 +23,7 @@ __all__ = [
     "DataReplayRuntime",
     "DataSourceKind",
     "DataSourceSpec",
+    "LagAnalysisRequest",
     "LoadedDataSource",
     "ModelDescriptor",
     "PlatformApplication",
@@ -31,6 +33,7 @@ __all__ = [
     "ReplayConfig",
     "TaskDefinition",
     "TaskType",
+    "analyze_lagged_relationships",
     "audit_dataframe",
     "build_platform_application",
     "build_platform_report",

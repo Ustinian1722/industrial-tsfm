@@ -5,6 +5,7 @@ from typing import Any
 
 import pandas as pd
 
+from .analytics import LagAnalysisRequest, analyze_lagged_relationships
 from .anomaly_engine import AnomalyDetectionRequest, run_pca_spe_anomaly_detection
 from .application import PlatformApplication, build_platform_application
 from .connectors import LoadedDataSource, load_data_source
@@ -131,3 +132,26 @@ def run_project_anomaly(
     loaded, audit = audit_source(project, source_name)
     request = anomaly_request_from_payload(task_name, payload)
     return run_pca_spe_anomaly_detection(project, loaded.frame, audit, request)
+
+
+def lag_request_from_payload(payload: dict[str, Any]) -> LagAnalysisRequest:
+    config = dict(payload.get("analysis", {}))
+    target_column = str(config.get("target_column", "")).strip()
+    features = tuple(str(value) for value in config.get("feature_columns", []))
+    return LagAnalysisRequest(
+        target_column=target_column,
+        feature_columns=features,
+        max_lag=int(config.get("max_lag", 12)),
+        min_pairs=int(config.get("min_pairs", 12)),
+        top_k=int(config.get("top_k", 12)),
+    )
+
+
+def run_project_lag_analysis(
+    project: ProjectSpec,
+    source_name: str,
+    payload: dict[str, Any],
+) -> dict[str, Any]:
+    loaded, audit = audit_source(project, source_name)
+    request = lag_request_from_payload(payload)
+    return analyze_lagged_relationships(loaded.frame, audit, request)

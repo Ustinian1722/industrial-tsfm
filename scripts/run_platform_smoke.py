@@ -10,10 +10,12 @@ from industrial_tsfm.platform import (
     AnomalyDetectionRequest,
     DataSourceKind,
     DataSourceSpec,
+    LagAnalysisRequest,
     ProductRoutingRequest,
     ProjectSpec,
     TaskDefinition,
     TaskType,
+    analyze_lagged_relationships,
     build_platform_application,
     build_platform_report,
     model_catalog,
@@ -85,7 +87,7 @@ def main() -> None:
         name="Tennessee-style Process Intelligence Demo",
         description=(
             "Synthetic process data used only to validate product-facing data audit, model routing, "
-            "anomaly triage, API artifacts, and replay."
+            "anomaly triage, lag analysis, API artifacts, and replay."
         ),
         data_sources=(source,),
         tasks=(
@@ -122,6 +124,7 @@ def main() -> None:
         replay_batch_size=32,
     )
     application.write(output_dir)
+
     anomaly = run_pca_spe_anomaly_detection(
         project,
         loaded.frame,
@@ -133,8 +136,21 @@ def main() -> None:
             min_train_rows=32,
         ),
     )
+    lag_analysis = analyze_lagged_relationships(
+        loaded.frame,
+        application.data_audit,
+        LagAnalysisRequest(
+            target_column="temperature",
+            feature_columns=("load", "pressure"),
+            max_lag=6,
+            min_pairs=32,
+        ),
+    )
     (output_dir / "anomaly_result.json").write_text(
         json.dumps(anomaly, ensure_ascii=False, indent=2), encoding="utf-8"
+    )
+    (output_dir / "lag_analysis.json").write_text(
+        json.dumps(lag_analysis, ensure_ascii=False, indent=2), encoding="utf-8"
     )
     (output_dir / "model_catalog.json").write_text(
         json.dumps(model_catalog(), ensure_ascii=False, indent=2), encoding="utf-8"
@@ -153,6 +169,7 @@ def main() -> None:
     print(f"selected_model={application.model_route.get('selected_model')}")
     print(f"selected_strategy={application.model_route.get('selected_strategy')}")
     print(f"anomaly_points={anomaly['summary']['anomaly_points_test']}")
+    print(f"lag_top={lag_analysis['rankings'][0]['feature']}")
     print(f"replay_batches={application.replay['total_batches']}")
     print(report)
 

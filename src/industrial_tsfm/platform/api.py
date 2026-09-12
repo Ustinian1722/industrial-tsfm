@@ -15,6 +15,7 @@ from .services import (
     materialize_project_application,
     route_project_forecast,
     run_project_anomaly,
+    run_project_lag_analysis,
 )
 from .ui import render_dashboard
 from .workspace import WorkspaceStore, project_from_dict
@@ -89,6 +90,7 @@ def platform_capabilities() -> dict[str, Any]:
             TaskType.FORECASTING.value,
             TaskType.ANOMALY.value,
         ],
+        "analytics": ["lagged_association"],
         "data_source_contracts": [kind.value for kind in DataSourceKind],
         "implemented_local_connectors": [
             DataSourceKind.CSV.value,
@@ -151,7 +153,7 @@ def create_app(
         version="0.1.0",
         description=(
             "Product API for industrial projects, audited data, validation-only model routing, "
-            "anomaly triage, and deterministic application replay."
+            "anomaly triage, lagged association analysis, and deterministic application replay."
         ),
     )
 
@@ -221,6 +223,18 @@ def create_app(
             "audit": audit,
         }
         workspace.write_derived_artifact(project_id, f"data-audit-{source.name}", result)
+        return result
+
+    @app.post("/v1/projects/{project_id}/analysis/lag")
+    def lag_analysis(project_id: str, payload: dict[str, Any]) -> dict[str, Any]:
+        spec = _project_or_404(workspace, project_id)
+        try:
+            result = run_project_lag_analysis(spec, _source_name(payload), payload)
+        except KeyError as exc:
+            raise HTTPException(status_code=404, detail="project source not found") from exc
+        except (ConnectorError, TypeError, ValueError) as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
+        workspace.write_derived_artifact(project_id, "lag-analysis", result)
         return result
 
     @app.post("/v1/projects/{project_id}/route/{task_name}")
