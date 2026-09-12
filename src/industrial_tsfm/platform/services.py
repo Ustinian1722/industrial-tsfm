@@ -11,6 +11,7 @@ from .application import PlatformApplication, build_platform_application
 from .connectors import LoadedDataSource, load_data_source
 from .contracts import DataSourceSpec, ProjectSpec
 from .data_audit import audit_dataframe
+from .feature_discovery import VariableDiscoveryRequest, discover_variables
 from .model_router import ProductRoutingRequest, route_task
 from .shift_analysis import DistributionShiftRequest, analyze_distribution_shift
 
@@ -232,3 +233,28 @@ def run_project_shift_analysis(
     loaded, audit = audit_source(project, source_name)
     request = shift_request_from_payload(payload)
     return analyze_distribution_shift(loaded.frame, audit, request)
+
+
+def variable_discovery_request_from_payload(payload: dict[str, Any]) -> VariableDiscoveryRequest:
+    config = dict(payload.get("analysis", {}))
+    return VariableDiscoveryRequest(
+        target_column=str(config.get("target_column", "")).strip(),
+        feature_columns=tuple(str(value) for value in config.get("feature_columns", [])),
+        max_lag=int(config.get("max_lag", 12)),
+        min_pairs=int(config.get("min_pairs", 24)),
+        top_k=int(config.get("top_k", 12)),
+        shift_penalty_weight=float(config.get("shift_penalty_weight", 0.35)),
+        reference_fraction=float(config.get("reference_fraction", 0.50)),
+        target_fraction=float(config.get("target_fraction", 0.50)),
+        min_rows_per_partition=int(config.get("min_rows_per_partition", 16)),
+    )
+
+
+def run_project_variable_discovery(
+    project: ProjectSpec,
+    source_name: str,
+    payload: dict[str, Any],
+) -> dict[str, Any]:
+    loaded, audit = audit_source(project, source_name)
+    request = variable_discovery_request_from_payload(payload)
+    return discover_variables(loaded.frame, audit, request)

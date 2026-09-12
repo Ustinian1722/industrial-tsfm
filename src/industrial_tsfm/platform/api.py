@@ -17,6 +17,7 @@ from .services import (
     run_project_anomaly,
     run_project_lag_analysis,
     run_project_shift_analysis,
+    run_project_variable_discovery,
 )
 from .ui import render_dashboard
 from .workspace import WorkspaceStore, project_from_dict
@@ -91,7 +92,11 @@ def platform_capabilities() -> dict[str, Any]:
             TaskType.FORECASTING.value,
             TaskType.ANOMALY.value,
         ],
-        "analytics": ["lagged_association", "chronological_distribution_shift"],
+        "analytics": [
+            "lagged_association",
+            "chronological_distribution_shift",
+            "variable_candidate_discovery",
+        ],
         "data_source_contracts": [kind.value for kind in DataSourceKind],
         "implemented_local_connectors": [
             DataSourceKind.CSV.value,
@@ -154,8 +159,8 @@ def create_app(
         version="0.1.0",
         description=(
             "Product API for industrial projects, audited data, validation-only model routing, "
-            "anomaly triage, lagged association and distribution-shift analysis, and deterministic "
-            "application replay."
+            "anomaly triage, lag/shift/variable-discovery analytics, and deterministic application "
+            "replay."
         ),
     )
 
@@ -249,6 +254,18 @@ def create_app(
         except (ConnectorError, TypeError, ValueError) as exc:
             raise HTTPException(status_code=422, detail=str(exc)) from exc
         workspace.write_derived_artifact(project_id, "distribution-shift", result)
+        return result
+
+    @app.post("/v1/projects/{project_id}/analysis/discover")
+    def variable_discovery(project_id: str, payload: dict[str, Any]) -> dict[str, Any]:
+        spec = _project_or_404(workspace, project_id)
+        try:
+            result = run_project_variable_discovery(spec, _source_name(payload), payload)
+        except KeyError as exc:
+            raise HTTPException(status_code=404, detail="project source not found") from exc
+        except (ConnectorError, TypeError, ValueError) as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
+        workspace.write_derived_artifact(project_id, "variable-discovery", result)
         return result
 
     @app.post("/v1/projects/{project_id}/route/{task_name}")

@@ -12,6 +12,7 @@ from .application import PlatformApplication, build_platform_application
 from .connectors import ConnectorError, LoadedDataSource, load_data_source
 from .contracts import DataSourceKind, DataSourceSpec, ProjectSpec, TaskDefinition, TaskType
 from .data_audit import audit_dataframe
+from .feature_discovery import VariableDiscoveryRequest, discover_variables
 from .model_catalog import ModelDescriptor, get_model_descriptor, model_catalog
 from .model_router import ProductRoutingRequest, route_task
 from .report import build_platform_report
@@ -35,11 +36,13 @@ __all__ = [
     "ReplayConfig",
     "TaskDefinition",
     "TaskType",
+    "VariableDiscoveryRequest",
     "analyze_distribution_shift",
     "analyze_lagged_relationships",
     "audit_dataframe",
     "build_platform_application",
     "build_platform_report",
+    "discover_variables",
     "get_model_descriptor",
     "load_data_source",
     "model_catalog",

@@ -16,10 +16,12 @@ from industrial_tsfm.platform import (
     ProjectSpec,
     TaskDefinition,
     TaskType,
+    VariableDiscoveryRequest,
     analyze_distribution_shift,
     analyze_lagged_relationships,
     build_platform_application,
     build_platform_report,
+    discover_variables,
     model_catalog,
     run_pca_spe_anomaly_detection,
 )
@@ -89,7 +91,7 @@ def main() -> None:
         name="Tennessee-style Process Intelligence Demo",
         description=(
             "Synthetic process data used only to validate product-facing data audit, model routing, "
-            "anomaly triage, lag/shift analytics, API artifacts, and replay."
+            "anomaly triage, lag/shift/variable-discovery analytics, API artifacts, and replay."
         ),
         data_sources=(source,),
         tasks=(
@@ -158,6 +160,17 @@ def main() -> None:
             min_rows_per_partition=32,
         ),
     )
+    variable_discovery = discover_variables(
+        loaded.frame,
+        application.data_audit,
+        VariableDiscoveryRequest(
+            target_column="temperature",
+            feature_columns=("load", "pressure"),
+            max_lag=6,
+            min_pairs=32,
+            min_rows_per_partition=32,
+        ),
+    )
     (output_dir / "anomaly_result.json").write_text(
         json.dumps(anomaly, ensure_ascii=False, indent=2), encoding="utf-8"
     )
@@ -166,6 +179,9 @@ def main() -> None:
     )
     (output_dir / "distribution_shift.json").write_text(
         json.dumps(shift_analysis, ensure_ascii=False, indent=2), encoding="utf-8"
+    )
+    (output_dir / "variable_discovery.json").write_text(
+        json.dumps(variable_discovery, ensure_ascii=False, indent=2), encoding="utf-8"
     )
     (output_dir / "model_catalog.json").write_text(
         json.dumps(model_catalog(), ensure_ascii=False, indent=2), encoding="utf-8"
@@ -186,6 +202,7 @@ def main() -> None:
     print(f"anomaly_points={anomaly['summary']['anomaly_points_test']}")
     print(f"lag_top={lag_analysis['rankings'][0]['feature']}")
     print(f"shift_score={shift_analysis['aggregate']['shift_score']:.3f}")
+    print(f"discovery_top={variable_discovery['rankings'][0]['feature']}")
     print(f"replay_batches={application.replay['total_batches']}")
     print(report)
 

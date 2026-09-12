@@ -67,6 +67,7 @@ jobs:
           test -s results/platform-smoke/anomaly_result.json
           test -s results/platform-smoke/lag_analysis.json
           test -s results/platform-smoke/distribution_shift.json
+          test -s results/platform-smoke/variable_discovery.json
           test -s results/platform-smoke/model_catalog.json
           test -s results/platform-smoke/capabilities.json
           test -s results/platform-smoke/index.html
@@ -79,7 +80,9 @@ jobs:
           grep -q '"interpretation_boundary": "association_not_causality"' results/platform-smoke/lag_analysis.json
           grep -q '"target_labels_used": false' results/platform-smoke/distribution_shift.json
           grep -q '"future_information_used_for_reference_statistics": false' results/platform-smoke/distribution_shift.json
-          grep -q '"chronological_distribution_shift"' results/platform-smoke/capabilities.json
+          grep -q '"target_labels_used_for_shift": false' results/platform-smoke/variable_discovery.json
+          grep -q '"future_feature_values_used_for_lag_association": false' results/platform-smoke/variable_discovery.json
+          grep -q '"variable_candidate_discovery"' results/platform-smoke/capabilities.json
 
       - name: Upload product demo artifact
         uses: actions/upload-artifact@v4
