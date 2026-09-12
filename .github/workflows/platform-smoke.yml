@@ -1,0 +1,93 @@
+name: Platform Smoke
+
+on:
+  push:
+    paths:
+      - "src/industrial_tsfm/platform/**"
+      - "src/industrial_tsfm/platform_cli.py"
+      - "src/industrial_tsfm/adaptation_engine.py"
+      - "src/industrial_tsfm/selection.py"
+      - "scripts/run_platform_smoke.py"
+      - "tests/test_platform*.py"
+      - "pyproject.toml"
+      - ".github/workflows/platform-smoke.yml"
+  pull_request:
+    paths:
+      - "src/industrial_tsfm/platform/**"
+      - "src/industrial_tsfm/platform_cli.py"
+      - "src/industrial_tsfm/adaptation_engine.py"
+      - "src/industrial_tsfm/selection.py"
+      - "scripts/run_platform_smoke.py"
+      - "tests/test_platform*.py"
+      - "pyproject.toml"
+      - ".github/workflows/platform-smoke.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  platform-smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install lightweight platform dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install numpy pandas PyYAML scikit-learn pytest ruff fastapi uvicorn httpx
+          python -m pip install -e . --no-deps
+
+      - name: Run platform unit tests
+        run: python -m pytest -q tests/test_platform*.py
+
+      - name: Run platform smoke build
+        run: python scripts/run_platform_smoke.py
+
+      - name: Verify CLI and API imports
+        run: |
+          industrial-tsfm-platform capabilities > results/platform-smoke/capabilities.json
+          python -c "from industrial_tsfm.platform.api import create_app; create_app('results/platform-smoke')"
+
+      - name: Verify generated artifacts
+        run: |
+          test -s results/platform-smoke/project.json
+          test -s results/platform-smoke/data_provenance.json
+          test -s results/platform-smoke/data_audit.json
+          test -s results/platform-smoke/validation_evidence.csv
+          test -s results/platform-smoke/model_route.json
+          test -s results/platform-smoke/replay_snapshot.json
+          test -s results/platform-smoke/application.json
+          test -s results/platform-smoke/anomaly_result.json
+          test -s results/platform-smoke/lag_analysis.json
+          test -s results/platform-smoke/distribution_shift.json
+          test -s results/platform-smoke/variable_discovery.json
+          test -s results/platform-smoke/model_catalog.json
+          test -s results/platform-smoke/capabilities.json
+          test -s results/platform-smoke/index.html
+          grep -q '"target_labels_used": false' results/platform-smoke/model_route.json
+          grep -q '"selected_model": "chronos2"' results/platform-smoke/model_route.json
+          grep -q '"status": "ready"' results/platform-smoke/application.json
+          grep -q '"model": "pca_spe_product"' results/platform-smoke/anomaly_result.json
+          grep -q '"target_labels_used": false' results/platform-smoke/anomaly_result.json
+          grep -q '"future_information_used": false' results/platform-smoke/lag_analysis.json
+          grep -q '"interpretation_boundary": "association_not_causality"' results/platform-smoke/lag_analysis.json
+          grep -q '"target_labels_used": false' results/platform-smoke/distribution_shift.json
+          grep -q '"future_information_used_for_reference_statistics": false' results/platform-smoke/distribution_shift.json
+          grep -q '"target_labels_used_for_shift": false' results/platform-smoke/variable_discovery.json
+          grep -q '"future_feature_values_used_for_lag_association": false' results/platform-smoke/variable_discovery.json
+          grep -q '"variable_candidate_discovery"' results/platform-smoke/capabilities.json
+
+      - name: Upload product demo artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: industsfm-platform-smoke
+          path: results/platform-smoke/
+          if-no-files-found: error
+          retention-days: 14
