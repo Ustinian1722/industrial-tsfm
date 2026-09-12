@@ -10,6 +10,11 @@ from .connectors import ConnectorError, load_data_source
 from .contracts import DataSourceKind, TaskType
 from .data_audit import audit_dataframe
 from .model_catalog import model_catalog
+from .services import (
+    materialize_project_application,
+    route_project_forecast,
+    run_project_anomaly,
+)
 from .workspace import WorkspaceStore, project_from_dict
 
 
@@ -111,16 +116,29 @@ def _artifact_or_404(
         raise HTTPException(status_code=404, detail="application artifact not found") from exc
 
 
+def _project_or_404(workspace: WorkspaceStore, project_id: str):
+    try:
+        return workspace.get_project(project_id)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail="project not found") from exc
+
+
+def _source_name(payload: dict[str, Any]) -> str:
+    name = str(payload.get("source_name", "")).strip()
+    if not name:
+        raise HTTPException(status_code=422, detail="source_name is required")
+    return name
+
+
 def create_app(
     artifact_root: str | Path = "results",
     workspace_root: str | Path = ".industsfm/workspace",
 ) -> FastAPI:
     """Create the V1 local platform API.
 
-    Materialized applications remain read-only. Project specifications and data
-    audit artifacts are writable in the explicit local workspace root. Remote
-    authentication, arbitrary uploads, and live OT control are deliberately out
-    of scope for this V1 service.
+    Materialized applications are generated from explicit project contracts and
+    validation evidence. Remote authentication, arbitrary uploads, and live OT
+    control are deliberately out of scope for this V1 service.
     """
 
     artifacts = ApplicationArtifactStore(artifact_root)
@@ -166,10 +184,7 @@ def create_app(
 
     @app.post("/v1/projects/{project_id}/audit/{source_name}")
     def audit_project_source(project_id: str, source_name: str) -> dict[str, Any]:
-        try:
-            spec = workspace.get_project(project_id)
-        except KeyError as exc:
-            raise HTTPException(status_code=404, detail="project not found") from exc
+        spec = _project_or_404(workspace, project_id)
         matches = [source for source in spec.data_sources if source.name == source_name]
         if len(matches) != 1:
             raise HTTPException(status_code=404, detail="data source not found")
@@ -184,11 +199,7 @@ def create_app(
         except (ConnectorError, ValueError) as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from exc
         target_columns = tuple(
-            dict.fromkeys(
-                target
-                for task in spec.tasks
-                for target in task.target_columns
-            )
+            dict.fromkeys(target for task in spec.tasks for target in task.target_columns)
         )
         audit = audit_dataframe(
             loaded.frame,
@@ -203,6 +214,51 @@ def create_app(
             "audit": audit,
         }
         workspace.write_derived_artifact(project_id, f"data-audit-{source.name}", result)
+        return result
+
+    @app.post("/v1/projects/{project_id}/route/{task_name}")
+    def route_project(project_id: str, task_name: str, payload: dict[str, Any]) -> dict[str, Any]:
+        spec = _project_or_404(workspace, project_id)
+        try:
+            result = route_project_forecast(spec, _source_name(payload), task_name, payload)
+        except KeyError as exc:
+            raise HTTPException(status_code=404, detail="project source or task not found") from exc
+        except (ConnectorError, TypeError, ValueError) as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
+        workspace.write_derived_artifact(project_id, f"model-route-{task_name}", result)
+        return result
+
+    @app.post("/v1/projects/{project_id}/applications/{task_name}", status_code=201)
+    def create_project_application(
+        project_id: str,
+        task_name: str,
+        payload: dict[str, Any],
+    ) -> dict[str, Any]:
+        spec = _project_or_404(workspace, project_id)
+        try:
+            application = materialize_project_application(
+                spec,
+                _source_name(payload),
+                task_name,
+                payload,
+                artifacts.root,
+            )
+        except KeyError as exc:
+            raise HTTPException(status_code=404, detail="project source or task not found") from exc
+        except (ConnectorError, TypeError, ValueError) as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
+        return application.manifest()
+
+    @app.post("/v1/projects/{project_id}/anomaly/{task_name}")
+    def run_anomaly(project_id: str, task_name: str, payload: dict[str, Any]) -> dict[str, Any]:
+        spec = _project_or_404(workspace, project_id)
+        try:
+            result = run_project_anomaly(spec, _source_name(payload), task_name, payload)
+        except KeyError as exc:
+            raise HTTPException(status_code=404, detail="project source or task not found") from exc
+        except (ConnectorError, TypeError, ValueError) as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
+        workspace.write_derived_artifact(project_id, f"anomaly-{task_name}", result)
         return result
 
     @app.get("/v1/applications")

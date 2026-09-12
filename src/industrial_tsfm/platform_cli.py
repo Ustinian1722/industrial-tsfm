@@ -15,7 +15,7 @@ def _serve(args: argparse.Namespace) -> None:
 
     from .platform.api import create_app
 
-    app = create_app(args.artifact_root)
+    app = create_app(args.artifact_root, args.workspace_root)
     uvicorn.run(app, host=args.host, port=args.port, reload=args.reload)
 
 
@@ -44,8 +44,9 @@ def main() -> None:
     parser = argparse.ArgumentParser(description="IndusTSFM industrial platform CLI")
     subparsers = parser.add_subparsers(dest="command", required=True)
 
-    serve = subparsers.add_parser("serve", help="serve the read-only V1 product API")
+    serve = subparsers.add_parser("serve", help="serve the V1 local product API")
     serve.add_argument("--artifact-root", default="results")
+    serve.add_argument("--workspace-root", default=".industsfm/workspace")
     serve.add_argument("--host", default="127.0.0.1")
     serve.add_argument("--port", type=int, default=8000)
     serve.add_argument("--reload", action="store_true")
