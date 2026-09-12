@@ -1,118 +1,107 @@
-# IndusTSFM Productization V1 — TPT-like Industrial Intelligence Platform
+# IndusTSFM Productization V1 — Industrial Time-Series Intelligence Platform
 
-## Goal
+## Product goal
 
-Evolve the existing leakage-safe TSFM research platform into a product-facing industrial time-series intelligence system without destroying the current research protocols.
-
-The product principle is **task-centric rather than model-centric**:
+Evolve the leakage-safe IndusTSFM research platform into a task-centric industrial time-series intelligence product without weakening the current evaluation boundaries.
 
 ```text
 Project
 → Data Source
 → Data Audit
+→ Analytics / Shift / Variable Discovery
 → Task Definition
-→ Analysis / Shift / OOD
-→ Model Routing
-→ Zero-shot / Adaptation / Fine-tuning
-→ Forecast / Anomaly / Diagnosis
-→ Deployment Application
+→ AutoModel / Adaptation Routing
+→ Forecast / Anomaly
+→ Application Runtime
+→ Deployment
 ```
 
-The current `industrial_tsfm` research runners remain the numerical core. Product-facing code lives under `industrial_tsfm.platform` and must not silently change train/validation/test boundaries.
+The product layer lives under `industrial_tsfm.platform`. Existing research runners remain the numerical core and are not silently rewritten by the product layer.
 
-## V1 scope
+## Implemented V1 surface
 
-V1 is deliberately smaller than a full TPT clone. It establishes the product skeleton that future enterprise datasets can plug into.
+### Project, data, and workspace
 
-### 1. Project and task contracts
+- explicit `ProjectSpec`, `DataSourceSpec`, and `TaskDefinition` contracts;
+- local CSV, Parquet, and in-memory connectors;
+- file provenance including resolved location, row/column metadata, and SHA-256 for local files;
+- local JSON workspace for persistent project specifications and derived analysis artifacts;
+- declared SQL, MQTT, and OPC-UA connector contracts that fail closed until live connection/security semantics are implemented.
 
-A project owns one or more data sources and one or more explicit tasks. Supported task contracts are defined up front for forecasting, anomaly detection, fault diagnosis, RUL, regression and classification. V1 executes forecasting through the existing IndusTSFM engine; the other contracts establish stable extension boundaries.
+### Data Audit
 
-### 2. Data Audit as a first-class product feature
+The platform reports timestamp validity/order, duplicate rows, missingness, constant variables, usable numeric variables, configured target availability, high-correlation pairs, and a transparent readiness score. Audit does not silently impute, resample, or reorder data.
 
-Before any model is chosen, the platform reports:
+### Industrial analytics
 
-- row and variable counts;
-- timestamp validity, duplicates and ordering problems;
-- missingness and degenerate/constant tags;
-- usable numeric variables;
-- high-correlation pairs;
-- target availability;
-- a transparent readiness score and its penalties.
+V1 now exposes four transparent analytics tools:
 
-The audit does not silently clean data. Cleaning and resampling decisions remain explicit follow-up actions.
+1. **Lagged association** — ranks historical/simultaneous feature-to-target associations over non-negative lags. Future feature values are never shifted backward into the target time step. This is association, not causality.
+2. **Chronological distribution shift** — compares an early reference prefix with a late target suffix using source-standardized mean drift and dispersion change. Configured target labels are excluded by default.
+3. **Cross-source distribution shift** — compares an explicit reference data source with a second target data source. The target source may be unlabeled; reference statistics do not use target data.
+4. **Variable candidate discovery** — combines lag association, observed coverage, and a transparent shift penalty into a screening score. It is not causal discovery and is not model-derived feature importance.
 
-### 3. Product UI artifact
+The primary shift score is RMS source-standardized mean shift, matching the existing adaptation-engine convention.
 
-V1 generates a dependency-free HTML report with a future product navigation structure:
+### AutoModel / adaptation routing
+
+The product router wraps the existing validation-only adaptation engine. It ranks implemented model candidates from validation evidence while honoring parameter, latency, and adaptation budgets. Supported strategies include zero-shot inference, target scaling, residual calibration, supervised few-shot fine-tuning, and PEFT where the selected model contract permits it.
+
+`routing.auto_shift=true` can feed an unlabeled chronological shift score into strategy selection. An explicit `routing.shift_score` always takes precedence, so automatic shift evidence never silently overrides a user-supplied value.
+
+### Anomaly triage
+
+The first deployment-safe anomaly path uses PCA-SPE fitted on the configured normal training prefix, with train-score quantile thresholding, event counting, sensor contribution ranking, and lightweight pattern triage. Test labels are not used for threshold selection. Sensor contributions are triage evidence, not causal root-cause claims.
+
+### Application runtime
+
+`PlatformApplication` materializes project metadata, data provenance, audit evidence, validation evidence, model route, and deterministic offline replay. Replay preserves input order and performs no wall-clock sleep, hidden sorting, interpolation, or resampling.
+
+### API and Studio UI
+
+FastAPI provides a local product service and `IndusTSFM Studio` provides a dependency-free dashboard for Projects, Analytics, Model Hub, Applications, Data Sources, and Runtime status.
+
+Important endpoints include:
 
 ```text
-Overview
-Data
-Analysis
-Models
-Applications
-Deployment
+GET  /health
+GET  /v1/capabilities
+GET  /v1/projects
+POST /v1/projects
+POST /v1/projects/{project_id}/audit/{source_name}
+POST /v1/projects/{project_id}/analysis/lag
+POST /v1/projects/{project_id}/analysis/shift
+POST /v1/projects/{project_id}/analysis/shift-sources
+POST /v1/projects/{project_id}/analysis/discover
+POST /v1/projects/{project_id}/route/{task_name}
+POST /v1/projects/{project_id}/applications/{task_name}
+POST /v1/projects/{project_id}/anomaly/{task_name}
+GET  /v1/applications
 ```
 
-The first report exposes project metadata, data health, task definition, variable status and the recommended model-input set. Later iterations will replace the static artifact with a service-backed Web UI.
+The CLI entry point is `industrial-tsfm-platform` with `serve`, `capabilities`, and `list` commands.
 
-### 4. GitHub Actions product smoke
+## Evidence boundaries
 
-`.github/workflows/platform-smoke.yml` validates the new product path on every relevant push/PR and can also be triggered manually. It:
+The product layer keeps these rules explicit:
 
-1. installs the repository in the existing dev environment;
-2. runs platform-specific tests;
-3. generates a synthetic industrial project;
-4. runs Data Audit;
-5. builds the HTML product artifact;
-6. uploads the generated project/audit/report as a workflow artifact.
+- model selection remains validation-only;
+- automatic shift analysis does not use target labels;
+- lag analysis never uses future feature values;
+- variable discovery is a heuristic candidate screen, not a causal claim;
+- anomaly thresholds are not selected on final target/test labels;
+- deterministic numerical tools remain below any future LLM Agent layer;
+- closed-loop OT control is not enabled in V1.
 
-No external model checkpoint or private industrial dataset is required for CI.
+## CI contract
 
-## Next milestones
+`.github/workflows/platform-smoke.yml` uses synthetic process data and no private checkpoint. It exercises project creation, audit, model routing, anomaly triage, lag analysis, distribution shift, variable discovery, replay, API imports, CLI capabilities, HTML reporting, and artifact generation. The existing multi-Python research CI remains independent.
 
-### V1.1 — Model Router
+## Next product boundary
 
-Wrap the existing validation-only `adaptation_engine` behind a product-facing routing contract. Inputs should include task type, target support budget, latency/parameter constraints and shift score. Outputs must retain `target_labels_used: false` semantics where applicable.
+The deterministic local V1 layer is now close to a freeze candidate. The next material architecture choice is the first live industrial connector:
 
-### V1.2 — Data connectors
+- **OPC-UA first** emphasizes PLC/SCADA/process-industry integration and structured tag browsing;
+- **MQTT first** emphasizes lightweight edge telemetry, gateways, and publish/subscribe deployment.
 
-Add connector interfaces for CSV/Parquet first, then SQL, MQTT and OPC-UA. Connectors normalize metadata and schema but do not hide provenance.
-
-### V1.3 — Application runtime
-
-Turn a validated model/task pair into a local inference application with a stable request/response schema, replay mode, prediction history and model/version metadata.
-
-### V1.4 — Anomaly engine integration
-
-Port reusable pieces from `industrial-anomaly-detection` behind a task adapter rather than copying the whole repository. Initial target capabilities: anomaly score, thresholding, event detection, sensor attribution and latency profiling.
-
-### V2 — Analytics and decision layer
-
-Add lag analysis, feature importance, causal-candidate analysis, calibrated UQ, what-if rollouts and constrained optimization.
-
-### V3 — Agent orchestration
-
-Only after the numerical tools are stable, add an LLM agent that invokes Data Audit, analysis, model routing, forecasting, anomaly diagnosis and optimization as tools. The LLM must not replace numerical detection or control logic.
-
-## Non-goals
-
-- training a billion-parameter foundation model from scratch;
-- claiming one TSFM is universally best;
-- using target-test labels for automatic product decisions;
-- treating a chat interface as the product core;
-- direct closed-loop control before explicit safety and constraint layers exist.
-
-## Current first slice
-
-The first product slice adds:
-
-- `src/industrial_tsfm/platform/contracts.py`
-- `src/industrial_tsfm/platform/data_audit.py`
-- `src/industrial_tsfm/platform/report.py`
-- `scripts/run_platform_smoke.py`
-- `tests/test_platform.py`
-- `.github/workflows/platform-smoke.yml`
-
-This gives the repository a concrete path from research benchmark to an industrial-data product while keeping the existing TSFM experiments intact.
+After the first live connector, the next planned slices are streaming inference/history, richer fault-diagnosis adapters, calibrated uncertainty, what-if/constrained optimization, and only then LLM Agent orchestration over the deterministic tools.
