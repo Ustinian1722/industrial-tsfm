@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections import deque
 from collections.abc import Iterator
 from dataclasses import asdict, dataclass
 from typing import Any
@@ -103,4 +104,81 @@ class DataReplayRuntime:
             "wall_clock_sleep": False,
             "time": time_summary,
             "preview_batches": preview,
+        }
+
+
+@dataclass(frozen=True)
+class LiveSample:
+    tag: str
+    value: Any
+    timestamp: str
+    status: str = "Good"
+    status_good: bool = True
+    node_id: str | None = None
+    source_timestamp: str | None = None
+    server_timestamp: str | None = None
+
+    def to_dict(self) -> dict[str, Any]:
+        return asdict(self)
+
+
+class BoundedLiveBuffer:
+    """Bounded, append-only live sample buffer shared by streaming connectors.
+
+    The buffer never reorders, resamples or interpolates incoming samples. When
+    capacity is exceeded it drops the oldest record and exposes that drop count
+    in the runtime snapshot so data loss is visible to operators.
+    """
+
+    def __init__(self, max_rows: int = 4096) -> None:
+        if max_rows < 1:
+            raise ValueError("max_rows must be positive")
+        self.max_rows = int(max_rows)
+        self._rows: deque[LiveSample] = deque(maxlen=self.max_rows)
+        self.received_rows = 0
+        self.dropped_rows = 0
+
+    def append(self, sample: LiveSample) -> None:
+        if len(self._rows) == self.max_rows:
+            self.dropped_rows += 1
+        self._rows.append(sample)
+        self.received_rows += 1
+
+    def extend(self, samples: Iterator[LiveSample] | list[LiveSample] | tuple[LiveSample, ...]) -> None:
+        for sample in samples:
+            self.append(sample)
+
+    def clear(self) -> None:
+        self._rows.clear()
+        self.received_rows = 0
+        self.dropped_rows = 0
+
+    def records(self) -> tuple[dict[str, Any], ...]:
+        return tuple(sample.to_dict() for sample in self._rows)
+
+    def to_frame(self) -> pd.DataFrame:
+        return pd.DataFrame(self.records())
+
+    def latest_by_tag(self) -> dict[str, dict[str, Any]]:
+        latest: dict[str, dict[str, Any]] = {}
+        for sample in self._rows:
+            latest[sample.tag] = sample.to_dict()
+        return latest
+
+    def snapshot(self) -> dict[str, Any]:
+        rows = list(self._rows)
+        bad = sum(1 for sample in rows if not sample.status_good)
+        return {
+            "schema_version": "industrial_tsfm.live_buffer.v1",
+            "buffered_rows": len(rows),
+            "capacity": self.max_rows,
+            "received_rows": self.received_rows,
+            "dropped_rows": self.dropped_rows,
+            "bad_quality_rows_buffered": bad,
+            "preserves_arrival_order": True,
+            "resampling": False,
+            "interpolation": False,
+            "first_timestamp": rows[0].timestamp if rows else None,
+            "last_timestamp": rows[-1].timestamp if rows else None,
+            "latest_by_tag": self.latest_by_tag(),
         }
