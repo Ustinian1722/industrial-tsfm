@@ -5,7 +5,6 @@ from dataclasses import asdict, dataclass, field
 from datetime import datetime, timezone
 from typing import Any
 
-
 _SEVERITY_RANK = {"normal": 0, "warning": 1, "high": 2, "critical": 3}
 _ALLOWED_OPERATORS = {"eq", "ne", "gt", "gte", "lt", "lte"}
 _ALLOWED_FORECAST_METRICS = {"min", "max", "mean", "last", "lower_min", "upper_max"}
@@ -319,7 +318,7 @@ def _diagnosis_summary(payload: dict[str, Any]) -> dict[str, Any]:
     score = payload.get("score")
     event = payload.get("event")
     if not isinstance(score, dict) or not isinstance(event, dict):
-        raise ValueError("diagnosis evidence requires score and event objects")
+        raise TypeError("diagnosis evidence requires score and event objects")
     return {
         "severity": severity,
         "severity_rank": _SEVERITY_RANK[severity],
