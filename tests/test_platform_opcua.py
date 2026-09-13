@@ -1,8 +1,11 @@
 from __future__ import annotations
 
 import asyncio
+import inspect
 from datetime import datetime, timezone
 
+from industrial_tsfm.platform import opcua as opcua_module
+from industrial_tsfm.platform import opcua_runtime as opcua_runtime_module
 from industrial_tsfm.platform.contracts import DataSourceKind, DataSourceSpec
 from industrial_tsfm.platform.opcua import (
     OPCUAConnectionConfig,
@@ -121,3 +124,23 @@ def test_live_buffer_is_bounded_and_surfaces_drop_and_quality_counts() -> None:
     assert snapshot["preserves_arrival_order"] is True
     assert snapshot["resampling"] is False
     assert snapshot["latest_by_tag"]["a"]["value"] == 2.0
+
+
+def test_production_opcua_transport_has_no_write_primitives() -> None:
+    """Guard the V1 product boundary against accidental OT write support."""
+
+    production_source = "\n".join(
+        [
+            inspect.getsource(opcua_module),
+            inspect.getsource(opcua_runtime_module),
+        ]
+    )
+    forbidden_calls = (
+        ".write_value(",
+        ".write_data_value(",
+        ".write_attribute(",
+        ".set_writable(",
+    )
+
+    for call in forbidden_calls:
+        assert call not in production_source
