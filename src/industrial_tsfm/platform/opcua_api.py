@@ -8,6 +8,8 @@ from fastapi import APIRouter, FastAPI, HTTPException
 
 from .api import create_app as create_base_app
 from .contracts import DataSourceKind, DataSourceSpec
+from .diagnosis_api import attach_diagnosis_routes
+from .diagnosis_registry import LiveDiagnosisRegistry
 from .forecasting_api import attach_forecasting_routes
 from .forecasting_registry import LiveForecastingRegistry
 from .opcua import OPCUAConnectorError, browse_opcua_source, read_opcua_snapshot
@@ -151,11 +153,13 @@ def create_live_app(
     *,
     opcua_registry: OPCUALiveRuntimeRegistry | None = None,
     forecasting_registry: LiveForecastingRegistry | None = None,
+    diagnosis_registry: LiveDiagnosisRegistry | None = None,
 ) -> FastAPI:
-    """Compose Local V1 with read-only OPC-UA and live forecasting extensions."""
+    """Compose Local V1 with read-only OPC-UA, forecasting, and diagnosis extensions."""
 
     app = create_base_app(artifact_root=artifact_root, workspace_root=workspace_root)
     workspace = WorkspaceStore(workspace_root)
     attach_opcua_routes(app, workspace, opcua_registry)
     attach_forecasting_routes(app, workspace, forecasting_registry)
+    attach_diagnosis_routes(app, diagnosis_registry)
     return app
