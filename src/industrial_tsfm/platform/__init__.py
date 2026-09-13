@@ -13,6 +13,15 @@ from .application import PlatformApplication, build_platform_application
 from .connectors import ConnectorError, LoadedDataSource, load_data_source
 from .contracts import DataSourceKind, DataSourceSpec, ProjectSpec, TaskDefinition, TaskType
 from .data_audit import audit_dataframe
+from .decision_support import (
+    DecisionPolicy,
+    DecisionRule,
+    DecisionSupportApplication,
+    EvidenceCondition,
+    RecommendationScenario,
+    decision_policy_from_dict,
+)
+from .decision_support_registry import DecisionSupportRegistry
 from .diagnosis import DiagnosisRequest, LiveDiagnosisApplication
 from .diagnosis_deployment import DiagnosisDeploymentSpec, build_diagnosis_deployment_spec
 from .diagnosis_registry import LiveDiagnosisRegistry
@@ -90,11 +99,16 @@ __all__ = [
     "DataReplayRuntime",
     "DataSourceKind",
     "DataSourceSpec",
+    "DecisionPolicy",
+    "DecisionRule",
+    "DecisionSupportApplication",
+    "DecisionSupportRegistry",
     "DeterministicLastValuePredictor",
     "DeterministicPersistenceForecastModel",
     "DiagnosisDeploymentSpec",
     "DiagnosisRequest",
     "DistributionShiftRequest",
+    "EvidenceCondition",
     "ForecastModelRuntimeAdapter",
     "ForecastPoint",
     "ForecastingDeploymentSpec",
@@ -122,6 +136,7 @@ __all__ = [
     "Predictor",
     "ProductRoutingRequest",
     "ProjectSpec",
+    "RecommendationScenario",
     "ReplayBatch",
     "ReplayConfig",
     "RuntimeForecastModel",
@@ -142,6 +157,7 @@ __all__ = [
     "build_platform_report",
     "calibrate_conformal_forecast",
     "compare_source_distributions",
+    "decision_policy_from_dict",
     "discover_variables",
     "fit_pca_spe_artifact",
     "get_model_descriptor",
