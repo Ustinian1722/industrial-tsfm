@@ -12,6 +12,7 @@ from .opcua_runtime import OPCUALiveRuntime
 @dataclass
 class _RuntimeEntry:
     runtime_id: str
+    project_id: str | None
     source_name: str
     runtime: Any
     stop_event: asyncio.Event
@@ -35,11 +36,21 @@ class OPCUALiveRuntimeRegistry:
         self._counter = 0
         self._lock = asyncio.Lock()
 
-    async def start(self, source: DataSourceSpec) -> dict[str, Any]:
+    async def start(
+        self,
+        source: DataSourceSpec,
+        *,
+        project_id: str | None = None,
+    ) -> dict[str, Any]:
         async with self._lock:
-            existing = [entry for entry in self._entries.values() if entry.source_name == source.name]
+            existing = [
+                entry
+                for entry in self._entries.values()
+                if entry.project_id == project_id and entry.source_name == source.name
+            ]
             if existing:
-                raise RuntimeError(f"OPC-UA runtime already active for source {source.name!r}")
+                scope = f" in project {project_id!r}" if project_id is not None else ""
+                raise RuntimeError(f"OPC-UA runtime already active for source {source.name!r}{scope}")
             self._counter += 1
             runtime_id = f"opcua-{self._counter:04d}-{source.name}"
             runtime = self._runtime_factory(source)
@@ -47,6 +58,7 @@ class OPCUALiveRuntimeRegistry:
             task = asyncio.create_task(runtime.run(stop_event), name=runtime_id)
             self._entries[runtime_id] = _RuntimeEntry(
                 runtime_id=runtime_id,
+                project_id=project_id,
                 source_name=source.name,
                 runtime=runtime,
                 stop_event=stop_event,
@@ -67,6 +79,7 @@ class OPCUALiveRuntimeRegistry:
         snapshot.update(
             {
                 "runtime_id": runtime_id,
+                "project_id": entry.project_id,
                 "task_done": entry.task.done(),
                 "registry": "process_local_v1",
             }
