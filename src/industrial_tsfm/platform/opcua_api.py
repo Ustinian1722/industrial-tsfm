@@ -8,6 +8,8 @@ from fastapi import APIRouter, FastAPI, HTTPException
 
 from .api import create_app as create_base_app
 from .contracts import DataSourceKind, DataSourceSpec
+from .forecasting_api import attach_forecasting_routes
+from .forecasting_registry import LiveForecastingRegistry
 from .opcua import OPCUAConnectorError, browse_opcua_source, read_opcua_snapshot
 from .opcua_registry import OPCUALiveRuntimeRegistry
 from .workspace import WorkspaceStore
@@ -146,10 +148,14 @@ def attach_opcua_routes(
 def create_live_app(
     artifact_root: str | Path = "results",
     workspace_root: str | Path = ".industsfm/workspace",
+    *,
+    opcua_registry: OPCUALiveRuntimeRegistry | None = None,
+    forecasting_registry: LiveForecastingRegistry | None = None,
 ) -> FastAPI:
-    """Compose the frozen local V1 API with the OPC-UA live extension."""
+    """Compose Local V1 with read-only OPC-UA and live forecasting extensions."""
 
     app = create_base_app(artifact_root=artifact_root, workspace_root=workspace_root)
     workspace = WorkspaceStore(workspace_root)
-    attach_opcua_routes(app, workspace)
+    attach_opcua_routes(app, workspace, opcua_registry)
+    attach_forecasting_routes(app, forecasting_registry)
     return app
