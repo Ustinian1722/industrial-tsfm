@@ -64,6 +64,7 @@ def attach_forecasting_routes(
                 task_name=task_name,
                 model_route=model_route,
                 deployment_id=payload.get("deployment_id"),
+                project_id=project_id,
                 window_mode=payload.get("window_mode"),
                 checkpoint_ref=payload.get("checkpoint_ref"),
                 uq_artifact_ref=payload.get("uq_artifact_ref"),
@@ -76,7 +77,6 @@ def attach_forecasting_routes(
         except (TypeError, ValueError) as exc:
             raise HTTPException(status_code=422, detail=str(exc)) from exc
         result = spec.to_dict()
-        result["project_id"] = project_id
         workspace.write_derived_artifact(
             project_id,
             f"forecasting-deployment-{task_name}",
