@@ -14,6 +14,15 @@ def _utc_now() -> str:
     return datetime.now(timezone.utc).isoformat()
 
 
+def _chronology_valid(window: TimeSeriesWindow) -> bool:
+    if window.timestamp_column is None:
+        return True
+    return (
+        int(window.metadata.get("parse_failures", 0)) == 0
+        and int(window.metadata.get("out_of_order_transitions", 0)) == 0
+    )
+
+
 class Predictor(Protocol):
     """Minimal deterministic inference boundary for online applications."""
 
@@ -78,7 +87,12 @@ class DeterministicLastValuePredictor:
 
 
 class StreamingInferenceEngine:
-    """Source-agnostic online inference over replay or live runtime windows."""
+    """Source-agnostic online inference over replay or live runtime windows.
+
+    By default the engine refuses timestamp parse failures and backwards time
+    transitions. It never repairs chronology by sorting, so a source must either
+    provide chronological evidence or be rejected before model inference.
+    """
 
     def __init__(
         self,
@@ -86,6 +100,7 @@ class StreamingInferenceEngine:
         *,
         context_observations: int | None = None,
         minimum_rows: int = 1,
+        require_chronological: bool = True,
     ) -> None:
         if context_observations is not None and context_observations < 1:
             raise ValueError("context_observations must be positive when configured")
@@ -94,6 +109,7 @@ class StreamingInferenceEngine:
         self.predictor = predictor
         self.context_observations = context_observations
         self.minimum_rows = int(minimum_rows)
+        self.require_chronological = bool(require_chronological)
 
     @staticmethod
     def _observed_through(window: TimeSeriesWindow) -> str | None:
@@ -108,8 +124,10 @@ class StreamingInferenceEngine:
         missing_cells = int(window.frame.isna().sum().sum())
         bad = int(window.metadata.get("bad_quality_observations", 0))
         dropped = int(window.metadata.get("buffer_dropped_rows", 0))
+        parse_failures = int(window.metadata.get("parse_failures", 0))
         out_of_order = int(window.metadata.get("out_of_order_transitions", 0))
-        if bad or dropped or out_of_order:
+        chronology_valid = _chronology_valid(window)
+        if bad or dropped or parse_failures or out_of_order:
             state = "degraded"
         elif missing_cells:
             state = "partial"
@@ -119,7 +137,9 @@ class StreamingInferenceEngine:
             "state": state,
             "bad_quality_observations": bad,
             "dropped_observations": dropped,
+            "timestamp_parse_failures": parse_failures,
             "out_of_order_transitions": out_of_order,
+            "chronology_valid": chronology_valid,
             "missing_cells": missing_cells,
             "quality_mask_available": not window.quality_mask.empty,
         }
@@ -129,6 +149,11 @@ class StreamingInferenceEngine:
         if len(window.frame) < self.minimum_rows:
             raise ValueError(
                 f"insufficient context rows: have {len(window.frame)}, need {self.minimum_rows}"
+            )
+        if self.require_chronological and not _chronology_valid(window):
+            raise ValueError(
+                "streaming inference requires chronological timestamps; "
+                "the runtime preserves arrival order and will not sort or repair the window"
             )
         started = time.perf_counter()
         predictions = self.predictor.predict(window.frame.copy())
