@@ -85,14 +85,14 @@ def test_forecasting_registry_applies_frozen_uq_without_recalibration() -> None:
 
 def test_forecasting_registry_rejects_duplicate_ids_and_supports_remove() -> None:
     registry = LiveForecastingRegistry()
-    kwargs = dict(
-        application_id="same",
-        runtime_id="runtime-1",
-        source_name="plc",
-        task_name="forecast-x",
-        application=_app(),
-        provider=_provider(),
-    )
+    kwargs = {
+        "application_id": "same",
+        "runtime_id": "runtime-1",
+        "source_name": "plc",
+        "task_name": "forecast-x",
+        "application": _app(),
+        "provider": _provider(),
+    }
     registry.register(**kwargs)
     try:
         registry.register(**kwargs)
