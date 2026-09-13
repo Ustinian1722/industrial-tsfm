@@ -13,6 +13,9 @@ from .application import PlatformApplication, build_platform_application
 from .connectors import ConnectorError, LoadedDataSource, load_data_source
 from .contracts import DataSourceKind, DataSourceSpec, ProjectSpec, TaskDefinition, TaskType
 from .data_audit import audit_dataframe
+from .diagnosis import DiagnosisRequest, LiveDiagnosisApplication
+from .diagnosis_registry import LiveDiagnosisRegistry
+from .diagnosis_service import register_prepared_live_diagnosis
 from .feature_discovery import VariableDiscoveryRequest, discover_variables
 from .forecasting import (
     DeterministicPersistenceForecastModel,
@@ -88,6 +91,7 @@ __all__ = [
     "DataSourceSpec",
     "DeterministicLastValuePredictor",
     "DeterministicPersistenceForecastModel",
+    "DiagnosisRequest",
     "DistributionShiftRequest",
     "ForecastModelRuntimeAdapter",
     "ForecastPoint",
@@ -95,6 +99,8 @@ __all__ = [
     "ForecastingRecord",
     "ForecastingRequest",
     "LagAnalysisRequest",
+    "LiveDiagnosisApplication",
+    "LiveDiagnosisRegistry",
     "LiveForecastingApplication",
     "LiveForecastingRegistry",
     "LiveSample",
@@ -141,6 +147,7 @@ __all__ = [
     "opcua_config_from_source",
     "opcua_public_connection_metadata",
     "read_opcua_snapshot",
+    "register_prepared_live_diagnosis",
     "register_prepared_live_forecast",
     "route_task",
     "run_pca_spe_anomaly_detection",
