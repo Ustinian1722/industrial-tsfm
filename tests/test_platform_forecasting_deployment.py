@@ -48,10 +48,13 @@ def test_build_forecasting_deployment_requires_validation_only_route() -> None:
         source_name="plc",
         task_name="forecast-x",
         model_route=route,
+        project_id="demo-plant-01",
         checkpoint_ref="amazon/chronos-t5-tiny",
     )
     payload = spec.to_dict()
 
+    assert payload["project_id"] == "demo-plant-01"
+    assert payload["project_name"] == "Demo Plant"
     assert payload["selected_model"] == "chronos"
     assert payload["window_mode"] == "per_tag_univariate"
     assert payload["requires_aligned_rows"] is False
