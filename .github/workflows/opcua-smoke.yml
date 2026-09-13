@@ -42,8 +42,9 @@ jobs:
       - name: Install OPC-UA platform dependencies
         run: |
           python -m pip install --upgrade pip
-          python -m pip install numpy pandas PyYAML scikit-learn pytest asyncua
+          python -m pip install numpy pandas PyYAML scikit-learn pytest "asyncua>=1.1,<2"
           python -m pip install -e . --no-deps
+          python -c "import importlib.metadata as m; print('asyncua=' + m.version('asyncua'))"
 
       - name: Run OPC-UA unit tests
         run: python -m pytest -q tests/test_platform_opcua.py
@@ -55,9 +56,15 @@ jobs:
         run: |
           test -s results/opcua-smoke/browse.json
           test -s results/opcua-smoke/snapshot.json
+          test -s results/opcua-smoke/disconnected_runtime.json
           test -s results/opcua-smoke/live_runtime.json
           grep -q '"good_count": 2' results/opcua-smoke/snapshot.json
           grep -q '"authentication": "anonymous"' results/opcua-smoke/snapshot.json
+          grep -q '"status": "reconnecting"' results/opcua-smoke/disconnected_runtime.json
+          grep -Eq '"disconnects": [1-9][0-9]*' results/opcua-smoke/live_runtime.json
+          grep -Eq '"reconnects": [1-9][0-9]*' results/opcua-smoke/live_runtime.json
+          grep -q '"state_transitions"' results/opcua-smoke/live_runtime.json
+          grep -q '"data_gap_seconds"' results/opcua-smoke/live_runtime.json
           grep -q '"read_only": true' results/opcua-smoke/live_runtime.json
           grep -q '"writes_enabled": false' results/opcua-smoke/live_runtime.json
           grep -q '"status": "stopped"' results/opcua-smoke/live_runtime.json
