@@ -126,6 +126,7 @@ def test_decision_support_ranks_advisory_scenario_without_execution() -> None:
     assert result["llm_actions_enabled"] is False
     assert result["scenario_evaluation_scope"].endswith("not_process_simulation")
     assert result["claim_scope"] == "advisory_evidence_ranking_not_causal_or_control"
+    assert result["evidence"]["source_kind"] == "live"
     assert result["evidence"]["observation_skew_seconds"] == 1.0
 
 
@@ -137,6 +138,15 @@ def test_decision_support_refuses_temporally_misaligned_evidence() -> None:
             _forecast(observed_through="2026-01-01T00:05:00+00:00"),
             _diagnosis(observed_through="2026-01-01T00:00:00+00:00"),
         )
+
+
+def test_decision_support_refuses_mixed_live_and_replay_evidence() -> None:
+    app = DecisionSupportApplication(_policy())
+    diagnosis = _diagnosis()
+    diagnosis["source_kind"] = "replay"
+
+    with pytest.raises(RuntimeError, match="mixed evidence source kinds"):
+        app.evaluate(_forecast(), diagnosis)
 
 
 def test_missing_forecast_interval_evidence_does_not_silently_match() -> None:
@@ -169,6 +179,37 @@ def test_missing_forecast_interval_evidence_does_not_silently_match() -> None:
     evaluation = result["scenario_evaluations"][0]
     assert evaluation["eligible"] is False
     assert evaluation["guardrails"][0]["available"] is False
+    assert evaluation["guardrails"][0]["observed_value"] is None
+
+
+def test_false_guardrail_preserves_observed_value_for_audit() -> None:
+    policy = DecisionPolicy(
+        policy_id="audit-false-condition",
+        scenarios=(
+            RecommendationScenario(
+                scenario_id="review",
+                title="Review operation",
+                guardrails=(
+                    EvidenceCondition(
+                        source="forecast",
+                        metric="max",
+                        target="temperature",
+                        operator="gt",
+                        value=100.0,
+                    ),
+                ),
+            ),
+        ),
+        rules=(),
+        minimum_recommendation_score=0.0,
+    )
+
+    result = DecisionSupportApplication(policy).evaluate(_forecast(), _diagnosis())
+    guardrail = result["scenario_evaluations"][0]["guardrails"][0]
+
+    assert guardrail["available"] is True
+    assert guardrail["matched"] is False
+    assert guardrail["observed_value"] == 87.0
 
 
 def test_policy_parser_rejects_negative_rule_points() -> None:
