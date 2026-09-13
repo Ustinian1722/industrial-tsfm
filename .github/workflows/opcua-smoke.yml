@@ -5,24 +5,34 @@ on:
     paths:
       - "src/industrial_tsfm/platform/opcua.py"
       - "src/industrial_tsfm/platform/opcua_runtime.py"
+      - "src/industrial_tsfm/platform/opcua_registry.py"
       - "src/industrial_tsfm/platform/runtime.py"
       - "src/industrial_tsfm/platform/forecasting.py"
+      - "src/industrial_tsfm/platform/forecasting_registry.py"
+      - "src/industrial_tsfm/platform/forecasting_service.py"
+      - "src/industrial_tsfm/platform/forecasting_uq.py"
       - "src/industrial_tsfm/platform/__init__.py"
       - "scripts/run_opcua_smoke.py"
       - "tests/test_platform_opcua.py"
       - "tests/test_platform_forecasting.py"
+      - "tests/test_platform_forecasting_safety.py"
       - "pyproject.toml"
       - ".github/workflows/opcua-smoke.yml"
   pull_request:
     paths:
       - "src/industrial_tsfm/platform/opcua.py"
       - "src/industrial_tsfm/platform/opcua_runtime.py"
+      - "src/industrial_tsfm/platform/opcua_registry.py"
       - "src/industrial_tsfm/platform/runtime.py"
       - "src/industrial_tsfm/platform/forecasting.py"
+      - "src/industrial_tsfm/platform/forecasting_registry.py"
+      - "src/industrial_tsfm/platform/forecasting_service.py"
+      - "src/industrial_tsfm/platform/forecasting_uq.py"
       - "src/industrial_tsfm/platform/__init__.py"
       - "scripts/run_opcua_smoke.py"
       - "tests/test_platform_opcua.py"
       - "tests/test_platform_forecasting.py"
+      - "tests/test_platform_forecasting_safety.py"
       - "pyproject.toml"
       - ".github/workflows/opcua-smoke.yml"
   workflow_dispatch:
@@ -50,8 +60,12 @@ jobs:
           python -m pip install -e . --no-deps
           python -c "import importlib.metadata as m; print('asyncua=' + m.version('asyncua'))"
 
-      - name: Run OPC-UA unit tests
-        run: python -m pytest -q tests/test_platform_opcua.py tests/test_platform_forecasting.py
+      - name: Run OPC-UA and forecasting boundary tests
+        run: |
+          python -m pytest -q \
+            tests/test_platform_opcua.py \
+            tests/test_platform_forecasting.py \
+            tests/test_platform_forecasting_safety.py
 
       - name: Run real asyncua server/client smoke
         run: python scripts/run_opcua_smoke.py
