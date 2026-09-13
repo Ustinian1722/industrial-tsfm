@@ -22,10 +22,10 @@ from .opcua import (
     OPCUASample,
     OPCUATag,
     browse_opcua_source,
-    config_from_source as opcua_config_from_source,
-    public_connection_metadata as opcua_public_connection_metadata,
     read_opcua_snapshot,
 )
+from .opcua import config_from_source as opcua_config_from_source
+from .opcua import public_connection_metadata as opcua_public_connection_metadata
 from .opcua_registry import OPCUALiveRuntimeRegistry
 from .opcua_runtime import OPCUALiveRuntime, OPCUALiveState
 from .report import build_platform_report
