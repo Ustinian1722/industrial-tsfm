@@ -7,6 +7,7 @@ from typing import Any
 
 from .contracts import DataSourceSpec
 from .opcua_runtime import OPCUALiveRuntime
+from .runtime import WindowProvider
 
 
 @dataclass
@@ -96,6 +97,27 @@ class OPCUALiveRuntimeRegistry:
 
     def list(self) -> list[dict[str, Any]]:
         return [self.status(runtime_id) for runtime_id in sorted(self._entries)]
+
+    def window_provider(self, runtime_id: str) -> WindowProvider:
+        """Return the runtime through the source-neutral inference contract.
+
+        This is an in-process handoff only. It exposes no OPC-UA transport or
+        write primitive to forecasting/anomaly applications.
+        """
+
+        entry = self._entry(runtime_id)
+        provider = entry.runtime
+        if not hasattr(provider, "materialize_window"):
+            raise TypeError("registered OPC-UA runtime does not implement WindowProvider")
+        return provider
+
+    def runtime_scope(self, runtime_id: str) -> dict[str, str | None]:
+        entry = self._entry(runtime_id)
+        return {
+            "runtime_id": entry.runtime_id,
+            "project_id": entry.project_id,
+            "source_name": entry.source_name,
+        }
 
     async def stop(self, runtime_id: str, timeout_seconds: float = 5.0) -> dict[str, Any]:
         if timeout_seconds <= 0:
