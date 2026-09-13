@@ -144,6 +144,10 @@ def score_pca_spe_artifact(
     if top_k_sensors < 1:
         raise ValueError("top_k_sensors must be positive")
     numeric = _numeric_features(frame, artifact.feature_columns)
+    missing_by_feature = {
+        column: int(numeric[column].isna().sum()) for column in artifact.feature_columns
+    }
+    median_imputed_values = int(sum(missing_by_feature.values()))
     median = pd.Series(artifact.medians, index=artifact.feature_columns, dtype=float)
     values = numeric.fillna(median).to_numpy(dtype=float)
     mean = np.asarray(artifact.scaler_mean, dtype=float)
@@ -179,6 +183,9 @@ def score_pca_spe_artifact(
         "threshold_quantile": artifact.threshold_quantile,
         "artifact_fit_rows": artifact.fit_rows,
         "feature_columns": list(artifact.feature_columns),
+        "missing_value_policy": "frozen_training_median",
+        "median_imputed_values": median_imputed_values,
+        "median_imputed_by_feature": missing_by_feature,
         "point_scores": [float(value) for value in point_scores],
         "anomaly_flags": [bool(value) for value in flags],
         "latest_score": float(point_scores[-1]),
