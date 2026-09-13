@@ -15,11 +15,13 @@ from .contracts import DataSourceKind, DataSourceSpec, ProjectSpec, TaskDefiniti
 from .data_audit import audit_dataframe
 from .feature_discovery import VariableDiscoveryRequest, discover_variables
 from .forecasting import (
+    DeterministicPersistenceForecastModel,
     ForecastingRecord,
     ForecastingRequest,
     ForecastModelRuntimeAdapter,
     ForecastPoint,
     LiveForecastingApplication,
+    RuntimeForecastModel,
 )
 from .forecasting_deployment import (
     ForecastingDeploymentSpec,
@@ -84,6 +86,7 @@ __all__ = [
     "DataSourceKind",
     "DataSourceSpec",
     "DeterministicLastValuePredictor",
+    "DeterministicPersistenceForecastModel",
     "DistributionShiftRequest",
     "ForecastModelRuntimeAdapter",
     "ForecastPoint",
@@ -112,6 +115,7 @@ __all__ = [
     "ProjectSpec",
     "ReplayBatch",
     "ReplayConfig",
+    "RuntimeForecastModel",
     "StreamingInferenceEngine",
     "TaskDefinition",
     "TaskType",
