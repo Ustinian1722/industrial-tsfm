@@ -22,6 +22,11 @@ from .forecasting import (
     LiveForecastingApplication,
 )
 from .forecasting_registry import LiveForecastingRegistry
+from .forecasting_uq import (
+    ConformalForecastArtifact,
+    apply_conformal_forecast,
+    calibrate_conformal_forecast,
+)
 from .model_catalog import ModelDescriptor, get_model_descriptor, model_catalog
 from .model_router import ProductRoutingRequest, route_task
 from .online_anomaly import (
@@ -68,6 +73,7 @@ from .streaming import (
 __all__ = [
     "AnomalyDetectionRequest",
     "BoundedLiveBuffer",
+    "ConformalForecastArtifact",
     "ConnectorError",
     "CrossSourceShiftRequest",
     "DataReplayRuntime",
@@ -109,10 +115,12 @@ __all__ = [
     "WindowProvider",
     "analyze_distribution_shift",
     "analyze_lagged_relationships",
+    "apply_conformal_forecast",
     "audit_dataframe",
     "browse_opcua_source",
     "build_platform_application",
     "build_platform_report",
+    "calibrate_conformal_forecast",
     "compare_source_distributions",
     "discover_variables",
     "fit_pca_spe_artifact",
