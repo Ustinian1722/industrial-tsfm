@@ -223,9 +223,12 @@ class LiveForecastingApplication:
             values = pd.to_numeric(rows["value"], errors="coerce")
             if bool(values.isna().any()) or not bool(np.isfinite(values.to_numpy(dtype=float)).all()):
                 raise ValueError(f"target {target!r} context contains non-numeric or non-finite values")
-            if self.request.require_good_quality and "status_good" in rows.columns:
-                if not bool(rows["status_good"].fillna(False).astype(bool).all()):
-                    raise ValueError(f"target {target!r} context contains bad-quality samples")
+            if (
+                self.request.require_good_quality
+                and "status_good" in rows.columns
+                and not bool(rows["status_good"].fillna(False).astype(bool).all())
+            ):
+                raise ValueError(f"target {target!r} context contains bad-quality samples")
             timestamps = rows["timestamp"].tolist()
             chronology = _chronology_evidence(timestamps)
             if self.request.require_chronological and not chronology["chronology_valid"]:
