@@ -28,6 +28,7 @@ from .forecasting_deployment import (
     build_forecasting_deployment_spec,
 )
 from .forecasting_registry import LiveForecastingRegistry
+from .forecasting_service import register_prepared_live_forecast
 from .forecasting_uq import (
     ConformalForecastArtifact,
     apply_conformal_forecast,
@@ -140,6 +141,7 @@ __all__ = [
     "opcua_config_from_source",
     "opcua_public_connection_metadata",
     "read_opcua_snapshot",
+    "register_prepared_live_forecast",
     "route_task",
     "run_pca_spe_anomaly_detection",
     "score_pca_spe_artifact",
