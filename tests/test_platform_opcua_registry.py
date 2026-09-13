@@ -47,6 +47,7 @@ def test_registry_start_stop_and_duplicate_guard() -> None:
         started = await registry.start(_source())
         runtime_id = started["runtime_id"]
         assert started["registry"] == "process_local_v1"
+        assert started["project_id"] is None
         assert started["writes_enabled"] is False
         try:
             await registry.start(_source())
@@ -62,5 +63,28 @@ def test_registry_start_stop_and_duplicate_guard() -> None:
         assert stopped["task_done"] is True
         registry.remove(runtime_id)
         assert registry.list() == []
+
+    asyncio.run(scenario())
+
+
+def test_registry_scopes_same_source_name_by_project() -> None:
+    async def scenario() -> None:
+        registry = OPCUALiveRuntimeRegistry(runtime_factory=FakeRuntime)
+        left = await registry.start(_source(), project_id="project-a")
+        right = await registry.start(_source(), project_id="project-b")
+
+        assert left["project_id"] == "project-a"
+        assert right["project_id"] == "project-b"
+        assert left["runtime_id"] != right["runtime_id"]
+
+        try:
+            await registry.start(_source(), project_id="project-a")
+        except RuntimeError as exc:
+            assert "project-a" in str(exc)
+        else:
+            raise AssertionError("duplicate project/source runtime must be rejected")
+
+        await registry.stop_all()
+        assert all(row["task_done"] for row in registry.list())
 
     asyncio.run(scenario())
