@@ -5,17 +5,22 @@ import json
 from collections.abc import Callable
 from pathlib import Path
 
+import numpy as np
+import pandas as pd
 from asyncua import Server, ua
 
 from industrial_tsfm.platform import (
     DataSourceKind,
     DataSourceSpec,
     DeterministicPersistenceForecastModel,
+    DiagnosisRequest,
     ForecastingRequest,
     ForecastModelRuntimeAdapter,
+    LiveDiagnosisApplication,
     LiveForecastingApplication,
     OPCUALiveRuntime,
     browse_opcua_source,
+    fit_pca_spe_artifact,
     read_opcua_snapshot,
 )
 
@@ -44,6 +49,24 @@ async def _build_server(endpoint: str, *, temperature_value: float, pressure_val
     await temperature.set_writable()
     await pressure.set_writable()
     return server, process, temperature, pressure
+
+
+def _offline_diagnosis_artifact():
+    temperature = np.linspace(40.0, 46.0, 32)
+    pressure = 1.95 + 0.08 * (temperature - 40.0) + 0.01 * np.sin(np.arange(32))
+    training = pd.DataFrame(
+        {
+            "temperature": temperature,
+            "pressure": pressure,
+        }
+    )
+    return fit_pca_spe_artifact(
+        training,
+        ("temperature", "pressure"),
+        threshold_quantile=0.95,
+        n_components=1,
+        min_train_rows=16,
+    )
 
 
 async def _wait_until(
@@ -188,6 +211,26 @@ async def main() -> None:
         if len(live_forecast["forecasts"]) != 2:
             raise RuntimeError("live forecast did not emit the configured horizon")
 
+        diagnosis_app = LiveDiagnosisApplication(
+            _offline_diagnosis_artifact(),
+            DiagnosisRequest(context_observations=8, top_k_sensors=2),
+        )
+        live_diagnosis = diagnosis_app.infer(live)
+        (output_dir / "live_diagnosis.json").write_text(
+            json.dumps(live_diagnosis, ensure_ascii=False, indent=2, default=str),
+            encoding="utf-8",
+        )
+        if live_diagnosis["source_kind"] != "live":
+            raise RuntimeError("diagnosis did not consume the live runtime window")
+        if live_diagnosis["online_training"] is not False:
+            raise RuntimeError("live diagnosis smoke must remain inference-only")
+        if live_diagnosis["threshold_updated_online"] is not False:
+            raise RuntimeError("live diagnosis must not update its threshold")
+        if live_diagnosis["control_actions_enabled"] is not False:
+            raise RuntimeError("live diagnosis must not enable control actions")
+        if not str(live_diagnosis["claim_scope"]).endswith("not_causal_root_cause"):
+            raise RuntimeError("live diagnosis smoke lost the noncausal claim boundary")
+
         stop_event.set()
         await asyncio.wait_for(live_task, timeout=3.0)
         live_snapshot = live.snapshot()
@@ -216,6 +259,7 @@ async def main() -> None:
         print(f"reconnects={live_snapshot['state']['reconnects']}")
         print(f"data_gap_seconds={live_snapshot['state']['data_gap_seconds']:.3f}")
         print(f"forecast_points={len(live_forecast['forecasts'])}")
+        print(f"diagnosis_severity={live_diagnosis['severity']}")
     finally:
         if stop_event is not None:
             stop_event.set()

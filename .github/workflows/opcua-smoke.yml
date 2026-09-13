@@ -12,6 +12,12 @@ on:
       - "src/industrial_tsfm/platform/forecasting_registry.py"
       - "src/industrial_tsfm/platform/forecasting_service.py"
       - "src/industrial_tsfm/platform/forecasting_uq.py"
+      - "src/industrial_tsfm/platform/diagnosis.py"
+      - "src/industrial_tsfm/platform/diagnosis_deployment.py"
+      - "src/industrial_tsfm/platform/diagnosis_registry.py"
+      - "src/industrial_tsfm/platform/diagnosis_service.py"
+      - "src/industrial_tsfm/platform/diagnosis_api.py"
+      - "src/industrial_tsfm/platform/online_anomaly.py"
       - "src/industrial_tsfm/platform/__init__.py"
       - "scripts/run_opcua_smoke.py"
       - "tests/test_platform_opcua.py"
@@ -21,6 +27,11 @@ on:
       - "tests/test_platform_forecasting_safety.py"
       - "tests/test_platform_forecasting_service.py"
       - "tests/test_platform_forecasting_uq.py"
+      - "tests/test_platform_diagnosis.py"
+      - "tests/test_platform_diagnosis_deployment.py"
+      - "tests/test_platform_diagnosis_registry.py"
+      - "tests/test_platform_diagnosis_safety.py"
+      - "tests/test_platform_diagnosis_service.py"
       - "pyproject.toml"
       - ".github/workflows/opcua-smoke.yml"
   pull_request:
@@ -34,6 +45,12 @@ on:
       - "src/industrial_tsfm/platform/forecasting_registry.py"
       - "src/industrial_tsfm/platform/forecasting_service.py"
       - "src/industrial_tsfm/platform/forecasting_uq.py"
+      - "src/industrial_tsfm/platform/diagnosis.py"
+      - "src/industrial_tsfm/platform/diagnosis_deployment.py"
+      - "src/industrial_tsfm/platform/diagnosis_registry.py"
+      - "src/industrial_tsfm/platform/diagnosis_service.py"
+      - "src/industrial_tsfm/platform/diagnosis_api.py"
+      - "src/industrial_tsfm/platform/online_anomaly.py"
       - "src/industrial_tsfm/platform/__init__.py"
       - "scripts/run_opcua_smoke.py"
       - "tests/test_platform_opcua.py"
@@ -43,6 +60,11 @@ on:
       - "tests/test_platform_forecasting_safety.py"
       - "tests/test_platform_forecasting_service.py"
       - "tests/test_platform_forecasting_uq.py"
+      - "tests/test_platform_diagnosis.py"
+      - "tests/test_platform_diagnosis_deployment.py"
+      - "tests/test_platform_diagnosis_registry.py"
+      - "tests/test_platform_diagnosis_safety.py"
+      - "tests/test_platform_diagnosis_service.py"
       - "pyproject.toml"
       - ".github/workflows/opcua-smoke.yml"
   workflow_dispatch:
@@ -70,7 +92,7 @@ jobs:
           python -m pip install -e . --no-deps
           python -c "import importlib.metadata as m; print('asyncua=' + m.version('asyncua'))"
 
-      - name: Run OPC-UA and forecasting boundary tests
+      - name: Run OPC-UA, forecasting, and diagnosis boundary tests
         run: |
           python -m pytest -q \
             tests/test_platform_opcua.py \
@@ -79,7 +101,12 @@ jobs:
             tests/test_platform_forecasting_registry.py \
             tests/test_platform_forecasting_safety.py \
             tests/test_platform_forecasting_service.py \
-            tests/test_platform_forecasting_uq.py
+            tests/test_platform_forecasting_uq.py \
+            tests/test_platform_diagnosis.py \
+            tests/test_platform_diagnosis_deployment.py \
+            tests/test_platform_diagnosis_registry.py \
+            tests/test_platform_diagnosis_safety.py \
+            tests/test_platform_diagnosis_service.py
 
       - name: Run real asyncua server/client smoke
         run: python scripts/run_opcua_smoke.py
@@ -91,6 +118,7 @@ jobs:
           test -s results/opcua-smoke/disconnected_runtime.json
           test -s results/opcua-smoke/live_runtime.json
           test -s results/opcua-smoke/live_forecast.json
+          test -s results/opcua-smoke/live_diagnosis.json
           grep -q '"good_count": 2' results/opcua-smoke/snapshot.json
           grep -q '"authentication": "anonymous"' results/opcua-smoke/snapshot.json
           grep -q '"status": "reconnecting"' results/opcua-smoke/disconnected_runtime.json
@@ -105,6 +133,12 @@ jobs:
           grep -q '"source_kind": "live"' results/opcua-smoke/live_forecast.json
           grep -q '"online_training": false' results/opcua-smoke/live_forecast.json
           grep -q '"name": "persistence-ci"' results/opcua-smoke/live_forecast.json
+          grep -q '"schema_version": "industrial_tsfm.live_diagnosis.v1"' results/opcua-smoke/live_diagnosis.json
+          grep -q '"source_kind": "live"' results/opcua-smoke/live_diagnosis.json
+          grep -q '"online_training": false' results/opcua-smoke/live_diagnosis.json
+          grep -q '"threshold_updated_online": false' results/opcua-smoke/live_diagnosis.json
+          grep -q '"control_actions_enabled": false' results/opcua-smoke/live_diagnosis.json
+          grep -q '"claim_scope": "statistical_reconstruction_contribution_not_causal_root_cause"' results/opcua-smoke/live_diagnosis.json
 
       - name: Upload OPC-UA smoke artifact
         uses: actions/upload-artifact@v4
