@@ -50,10 +50,11 @@ def _source() -> DataSourceSpec:
     )
 
 
-def _deployment() -> ForecastingDeploymentSpec:
+def _deployment(project_id: str = "demo") -> ForecastingDeploymentSpec:
     return ForecastingDeploymentSpec(
         deployment_id="demo-live",
         project_name="Demo",
+        project_id=project_id,
         source_name="plc",
         task_name="forecast-x",
         target_columns=("x",),
@@ -69,7 +70,7 @@ def _deployment() -> ForecastingDeploymentSpec:
     )
 
 
-def test_prepared_model_binding_never_trains_or_selects_online() -> None:
+def test_prepared_model_binding_never_trains_or_allows_metadata_override() -> None:
     async def scenario() -> None:
         opcua = OPCUALiveRuntimeRegistry(runtime_factory=FakeLiveRuntime)
         started = await opcua.start(_source(), project_id="demo")
@@ -81,15 +82,53 @@ def test_prepared_model_binding_never_trains_or_selects_online() -> None:
             prepared_model=DeterministicPersistenceForecastModel(1),
             opcua_registry=opcua,
             forecasting_registry=forecasts,
-            model_metadata={"project_id": "demo", "prepared_offline": True},
+            model_metadata={
+                "prepared_offline": True,
+                "selected_model": "attacker-model",
+                "selected_strategy": "online-fit",
+                "selection_evidence": "target_guided",
+                "target_labels_used": True,
+                "checkpoint_ref": "untrusted-ref",
+                "deployment_id": "wrong-deployment",
+                "project_id": "wrong-project",
+            },
         )
 
+        model = status["model"]
         assert status["online_training"] is False
-        assert status["model"]["selection_evidence"] == "validation_only"
-        assert status["model"]["target_labels_used"] is False
-        assert status["model"]["prepared_offline"] is True
+        assert model["selected_model"] == "chronos"
+        assert model["selected_strategy"] == "zero_shot"
+        assert model["selection_evidence"] == "validation_only"
+        assert model["target_labels_used"] is False
+        assert model["checkpoint_ref"] == "amazon/chronos-t5-tiny"
+        assert model["deployment_id"] == "demo-live"
+        assert model["project_id"] == "demo"
+        assert model["prepared_offline"] is True
         payload = forecasts.infer_payload("demo-live")
         assert payload["forecasts"][0]["value"] == 2.0
+        await opcua.stop_all()
+
+    asyncio.run(scenario())
+
+
+def test_prepared_model_binding_rejects_runtime_from_other_project() -> None:
+    async def scenario() -> None:
+        opcua = OPCUALiveRuntimeRegistry(runtime_factory=FakeLiveRuntime)
+        started = await opcua.start(_source(), project_id="other-project")
+        forecasts = LiveForecastingRegistry()
+
+        try:
+            register_prepared_live_forecast(
+                deployment=_deployment(project_id="demo"),
+                runtime_id=started["runtime_id"],
+                prepared_model=DeterministicPersistenceForecastModel(1),
+                opcua_registry=opcua,
+                forecasting_registry=forecasts,
+            )
+        except ValueError as exc:
+            assert "runtime project" in str(exc)
+        else:
+            raise AssertionError("cross-project runtime binding must be rejected")
         await opcua.stop_all()
 
     asyncio.run(scenario())
