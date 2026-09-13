@@ -231,7 +231,7 @@ class AsyncuaTransport:
                     node_class_obj = await node.read_node_class()
                     browse_name = str(getattr(browse_name_obj, "Name", browse_name_obj))
                     node_class = str(node_class_obj)
-                except Exception as exc:  # server ACLs may deny metadata on individual nodes
+                except Exception as exc:  # noqa: BLE001 - per-node ACL failures are isolated
                     rows.append(
                         OPCUATag(
                             name=node_id,
@@ -255,7 +255,7 @@ class AsyncuaTransport:
                     continue
                 try:
                     children = await node.get_children()
-                except Exception:
+                except Exception:  # noqa: BLE001 - inaccessible branches must not abort browsing
                     children = []
                 for child in children:
                     queue.append((child, depth + 1, node_id))
@@ -294,7 +294,7 @@ class AsyncuaTransport:
                             status_good=is_good,
                         )
                     )
-                except Exception as exc:
+                except Exception as exc:  # noqa: BLE001 - report per-node read failures as quality state
                     rows.append(
                         OPCUASample(
                             tag=tag,
