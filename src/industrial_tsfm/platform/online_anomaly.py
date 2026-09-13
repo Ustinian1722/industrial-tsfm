@@ -77,7 +77,7 @@ def fit_pca_spe_artifact(
     feature_columns: tuple[str, ...],
     *,
     threshold_quantile: float = 0.995,
-    n_components: float | int = 0.95,
+    n_components: float = 0.95,
     min_train_rows: int = 16,
 ) -> PCASPEArtifact:
     """Fit all anomaly parameters from an explicit offline training/calibration frame."""
@@ -108,7 +108,7 @@ def fit_pca_spe_artifact(
 
     scaler = StandardScaler()
     scaled = scaler.fit_transform(train.to_numpy(dtype=float))
-    resolved_components: float | int = n_components
+    resolved_components = n_components
     if isinstance(resolved_components, int):
         resolved_components = min(resolved_components, scaled.shape[0], scaled.shape[1])
     pca = PCA(n_components=resolved_components, svd_solver="full", random_state=0)
