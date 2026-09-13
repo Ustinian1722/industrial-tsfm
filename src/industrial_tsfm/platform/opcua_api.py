@@ -8,6 +8,8 @@ from fastapi import APIRouter, FastAPI, HTTPException
 
 from .api import create_app as create_base_app
 from .contracts import DataSourceKind, DataSourceSpec
+from .decision_support_api import attach_decision_support_routes
+from .decision_support_registry import DecisionSupportRegistry
 from .diagnosis_api import attach_diagnosis_routes
 from .diagnosis_registry import LiveDiagnosisRegistry
 from .forecasting_api import attach_forecasting_routes
@@ -154,12 +156,20 @@ def create_live_app(
     opcua_registry: OPCUALiveRuntimeRegistry | None = None,
     forecasting_registry: LiveForecastingRegistry | None = None,
     diagnosis_registry: LiveDiagnosisRegistry | None = None,
+    decision_support_registry: DecisionSupportRegistry | None = None,
 ) -> FastAPI:
-    """Compose Local V1 with read-only OPC-UA, forecasting, and diagnosis extensions."""
+    """Compose Local V1 with read-only live intelligence and advisory decision support."""
 
     app = create_base_app(artifact_root=artifact_root, workspace_root=workspace_root)
     workspace = WorkspaceStore(workspace_root)
     attach_opcua_routes(app, workspace, opcua_registry)
-    attach_forecasting_routes(app, workspace, forecasting_registry)
-    attach_diagnosis_routes(app, workspace, diagnosis_registry)
+    active_forecasting = attach_forecasting_routes(app, workspace, forecasting_registry)
+    active_diagnosis = attach_diagnosis_routes(app, workspace, diagnosis_registry)
+    attach_decision_support_routes(
+        app,
+        workspace,
+        active_forecasting,
+        active_diagnosis,
+        decision_support_registry,
+    )
     return app
