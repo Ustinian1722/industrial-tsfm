@@ -53,6 +53,7 @@ def attach_opcua_routes(
             "writes_enabled": False,
             "credential_values_persisted": False,
             "runtime_registry": "process_local_v1",
+            "runtime_scope": "project_and_source",
             "quality_and_timestamps_preserved": True,
             "hidden_resampling": False,
         }
@@ -96,7 +97,7 @@ def attach_opcua_routes(
             )
         source = _opcua_source(workspace, project_id, source_name)
         try:
-            result = await active_registry.start(source)
+            result = await active_registry.start(source, project_id=project_id)
         except (OPCUAConnectorError, RuntimeError, ValueError) as exc:
             raise HTTPException(status_code=409, detail=str(exc)) from exc
         return result
