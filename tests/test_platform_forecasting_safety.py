@@ -6,6 +6,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1] / "src" / "industrial_tsfm" / "platform"
 LIVE_MODULES = (
     ROOT / "forecasting.py",
+    ROOT / "forecasting_deployment.py",
     ROOT / "forecasting_registry.py",
     ROOT / "forecasting_service.py",
     ROOT / "forecasting_api.py",
