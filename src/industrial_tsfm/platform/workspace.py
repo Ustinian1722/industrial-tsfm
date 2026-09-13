@@ -115,18 +115,27 @@ class WorkspaceStore:
         record = self.get_project_record(project_id)
         return project_from_dict(dict(record["spec"]))
 
+    def _derived_path(self, project_id: str, relative_name: str) -> Path:
+        self.get_project_record(project_id)
+        safe_name = _slug(relative_name)
+        return self.projects_root / _slug(project_id) / "derived" / f"{safe_name}.json"
+
     def write_derived_artifact(
         self,
         project_id: str,
         relative_name: str,
         payload: dict[str, Any],
     ) -> Path:
-        self.get_project_record(project_id)
-        safe_name = _slug(relative_name)
-        path = self.projects_root / _slug(project_id) / "derived" / f"{safe_name}.json"
+        path = self._derived_path(project_id, relative_name)
         path.parent.mkdir(parents=True, exist_ok=True)
         self._write_json(path, payload)
         return path
+
+    def read_derived_artifact(self, project_id: str, relative_name: str) -> dict[str, Any]:
+        path = self._derived_path(project_id, relative_name)
+        if not path.exists():
+            raise KeyError(relative_name)
+        return self._read_json(path)
 
     @staticmethod
     def _read_json(path: Path) -> dict[str, Any]:
