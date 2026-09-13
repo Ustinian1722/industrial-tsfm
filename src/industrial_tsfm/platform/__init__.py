@@ -21,6 +21,10 @@ from .forecasting import (
     ForecastPoint,
     LiveForecastingApplication,
 )
+from .forecasting_deployment import (
+    ForecastingDeploymentSpec,
+    build_forecasting_deployment_spec,
+)
 from .forecasting_registry import LiveForecastingRegistry
 from .forecasting_uq import (
     ConformalForecastArtifact,
@@ -83,6 +87,7 @@ __all__ = [
     "DistributionShiftRequest",
     "ForecastModelRuntimeAdapter",
     "ForecastPoint",
+    "ForecastingDeploymentSpec",
     "ForecastingRecord",
     "ForecastingRequest",
     "LagAnalysisRequest",
@@ -118,6 +123,7 @@ __all__ = [
     "apply_conformal_forecast",
     "audit_dataframe",
     "browse_opcua_source",
+    "build_forecasting_deployment_spec",
     "build_platform_application",
     "build_platform_report",
     "calibrate_conformal_forecast",
