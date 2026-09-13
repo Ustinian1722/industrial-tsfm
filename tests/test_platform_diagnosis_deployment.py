@@ -68,7 +68,7 @@ def test_build_diagnosis_deployment_uses_project_and_task_contract() -> None:
 def test_diagnosis_deployment_rejects_non_anomaly_task() -> None:
     try:
         build_diagnosis_deployment_spec(
-            _project(TaskType.FORECASTING),
+            _project(TaskType.REGRESSION),
             project_id="demo",
             source_name="plc",
             task_name="detect-process",
