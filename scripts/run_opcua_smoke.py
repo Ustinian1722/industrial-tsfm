@@ -12,13 +12,18 @@ from asyncua import Server, ua
 from industrial_tsfm.platform import (
     DataSourceKind,
     DataSourceSpec,
+    DecisionPolicy,
+    DecisionRule,
+    DecisionSupportApplication,
     DeterministicPersistenceForecastModel,
     DiagnosisRequest,
+    EvidenceCondition,
     ForecastingRequest,
     ForecastModelRuntimeAdapter,
     LiveDiagnosisApplication,
     LiveForecastingApplication,
     OPCUALiveRuntime,
+    RecommendationScenario,
     browse_opcua_source,
     fit_pca_spe_artifact,
     read_opcua_snapshot,
@@ -66,6 +71,59 @@ def _offline_diagnosis_artifact():
         threshold_quantile=0.95,
         n_components=1,
         min_train_rows=16,
+    )
+
+
+def _decision_policy() -> DecisionPolicy:
+    return DecisionPolicy(
+        policy_id="ci-live-triage-v1",
+        scenarios=(
+            RecommendationScenario(
+                scenario_id="maintain-review",
+                title="Maintain current plan and review evidence",
+                advisory_parameters={"load_reduction_pct": 0},
+            ),
+            RecommendationScenario(
+                scenario_id="review-derate-10",
+                title="Review a 10% load reduction",
+                advisory_parameters={"load_reduction_pct": 10},
+                guardrails=(
+                    EvidenceCondition(
+                        source="diagnosis",
+                        metric="severity",
+                        operator="gte",
+                        value="warning",
+                    ),
+                ),
+            ),
+        ),
+        rules=(
+            DecisionRule(
+                rule_id="diagnosis-escalated",
+                scenario_id="review-derate-10",
+                condition=EvidenceCondition(
+                    source="diagnosis",
+                    metric="severity",
+                    operator="gte",
+                    value="high",
+                ),
+                points=3.0,
+                rationale="Escalated diagnostic severity warrants operator review.",
+            ),
+            DecisionRule(
+                rule_id="temperature-forecast-high",
+                scenario_id="review-derate-10",
+                condition=EvidenceCondition(
+                    source="forecast",
+                    metric="max",
+                    target="temperature",
+                    operator="gt",
+                    value=44.5,
+                ),
+                points=2.0,
+                rationale="Forecast temperature exceeds the CI review threshold.",
+            ),
+        ),
     )
 
 
@@ -231,6 +289,27 @@ async def main() -> None:
         if not str(live_diagnosis["claim_scope"]).endswith("not_causal_root_cause"):
             raise RuntimeError("live diagnosis smoke lost the noncausal claim boundary")
 
+        decision_app = DecisionSupportApplication(_decision_policy())
+        live_decision = decision_app.evaluate(live_forecast, live_diagnosis)
+        (output_dir / "live_decision_support.json").write_text(
+            json.dumps(live_decision, ensure_ascii=False, indent=2, default=str),
+            encoding="utf-8",
+        )
+        if live_decision["advisory_only"] is not True:
+            raise RuntimeError("decision support smoke must remain advisory-only")
+        if live_decision["operator_confirmation_required"] is not True:
+            raise RuntimeError("decision support must require operator confirmation")
+        if live_decision["execution_enabled"] is not False:
+            raise RuntimeError("decision support must not expose execution")
+        if live_decision["control_actions_enabled"] is not False:
+            raise RuntimeError("decision support must not enable control actions")
+        if live_decision["opcua_writes_enabled"] is not False:
+            raise RuntimeError("decision support must not enable OPC-UA writes")
+        if live_decision["llm_actions_enabled"] is not False:
+            raise RuntimeError("decision support must not enable LLM actions")
+        if live_decision["claim_scope"] != "advisory_evidence_ranking_not_causal_or_control":
+            raise RuntimeError("decision support smoke lost the advisory claim boundary")
+
         stop_event.set()
         await asyncio.wait_for(live_task, timeout=3.0)
         live_snapshot = live.snapshot()
@@ -260,6 +339,9 @@ async def main() -> None:
         print(f"data_gap_seconds={live_snapshot['state']['data_gap_seconds']:.3f}")
         print(f"forecast_points={len(live_forecast['forecasts'])}")
         print(f"diagnosis_severity={live_diagnosis['severity']}")
+        print(f"decision_status={live_decision['status']}")
+        top = live_decision.get("top_recommendation") or {}
+        print(f"decision_top_scenario={top.get('scenario_id', 'none')}")
     finally:
         if stop_event is not None:
             stop_event.set()
