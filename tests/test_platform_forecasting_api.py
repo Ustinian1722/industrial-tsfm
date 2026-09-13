@@ -7,6 +7,13 @@ pytest.importorskip("httpx")
 from fastapi.testclient import TestClient
 
 from industrial_tsfm.models.naive import NaiveModel
+from industrial_tsfm.platform.contracts import (
+    DataSourceKind,
+    DataSourceSpec,
+    ProjectSpec,
+    TaskDefinition,
+    TaskType,
+)
 from industrial_tsfm.platform.forecasting import (
     ForecastingRequest,
     ForecastModelRuntimeAdapter,
@@ -15,6 +22,7 @@ from industrial_tsfm.platform.forecasting import (
 from industrial_tsfm.platform.forecasting_registry import LiveForecastingRegistry
 from industrial_tsfm.platform.opcua_api import create_live_app
 from industrial_tsfm.platform.runtime import BoundedLiveBuffer, LiveSample
+from industrial_tsfm.platform.workspace import WorkspaceStore
 
 
 def _registry() -> LiveForecastingRegistry:
@@ -42,6 +50,44 @@ def _registry() -> LiveForecastingRegistry:
     return registry
 
 
+def _workspace_with_route(root) -> WorkspaceStore:
+    workspace = WorkspaceStore(root)
+    project = ProjectSpec(
+        name="Demo",
+        data_sources=(
+            DataSourceSpec(
+                name="plc",
+                kind=DataSourceKind.OPCUA,
+                location="opc.tcp://127.0.0.1:4840/demo",
+                metadata={"node_ids": {"x": "ns=2;s=x"}},
+            ),
+        ),
+        tasks=(
+            TaskDefinition(
+                name="forecast-x",
+                task_type=TaskType.FORECASTING,
+                target_columns=("x",),
+                context_length=16,
+                horizon=4,
+            ),
+        ),
+    )
+    workspace.create_project(project, project_id="demo")
+    workspace.write_derived_artifact(
+        "demo",
+        "model-route-forecast-x",
+        {
+            "route_ready": True,
+            "task": "forecast-x",
+            "selected_model": "chronos",
+            "selected_strategy": "zero_shot",
+            "selection_evidence": "validation_only",
+            "target_labels_used": False,
+        },
+    )
+    return workspace
+
+
 def test_live_app_exposes_inference_only_forecasting_registry(tmp_path) -> None:
     registry = _registry()
     app = create_live_app(
@@ -64,6 +110,30 @@ def test_live_app_exposes_inference_only_forecasting_registry(tmp_path) -> None:
     assert inferred.status_code == 200
     assert inferred.json()["forecasts"][0]["value"] == 2.0
     assert registry.status("demo-live")["inference_count"] == 1
+
+
+def test_deployment_endpoint_uses_persisted_validation_only_route(tmp_path) -> None:
+    workspace_root = tmp_path / "workspace"
+    workspace = _workspace_with_route(workspace_root)
+    app = create_live_app(
+        artifact_root=tmp_path / "results",
+        workspace_root=workspace_root,
+    )
+    client = TestClient(app)
+
+    response = client.post(
+        "/v1/projects/demo/forecasting/forecast-x/deployment",
+        json={"source_name": "plc", "checkpoint_ref": "amazon/chronos-t5-tiny"},
+    )
+
+    assert response.status_code == 201
+    payload = response.json()
+    assert payload["selected_model"] == "chronos"
+    assert payload["selection_evidence"] == "validation_only"
+    assert payload["target_labels_used"] is False
+    assert payload["online_training"] is False
+    persisted = workspace.read_derived_artifact("demo", "forecasting-deployment-forecast-x")
+    assert persisted["deployment_id"] == payload["deployment_id"]
 
 
 def test_live_forecasting_api_returns_404_for_unknown_application(tmp_path) -> None:
