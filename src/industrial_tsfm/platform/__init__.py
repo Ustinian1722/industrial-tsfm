@@ -21,6 +21,7 @@ from .forecasting import (
     ForecastPoint,
     LiveForecastingApplication,
 )
+from .forecasting_registry import LiveForecastingRegistry
 from .model_catalog import ModelDescriptor, get_model_descriptor, model_catalog
 from .model_router import ProductRoutingRequest, route_task
 from .online_anomaly import (
@@ -80,6 +81,7 @@ __all__ = [
     "ForecastingRequest",
     "LagAnalysisRequest",
     "LiveForecastingApplication",
+    "LiveForecastingRegistry",
     "LiveSample",
     "LoadedDataSource",
     "ModelDescriptor",
