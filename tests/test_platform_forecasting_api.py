@@ -128,11 +128,13 @@ def test_deployment_endpoint_uses_persisted_validation_only_route(tmp_path) -> N
 
     assert response.status_code == 201
     payload = response.json()
+    assert payload["project_id"] == "demo"
     assert payload["selected_model"] == "chronos"
     assert payload["selection_evidence"] == "validation_only"
     assert payload["target_labels_used"] is False
     assert payload["online_training"] is False
     persisted = workspace.read_derived_artifact("demo", "forecasting-deployment-forecast-x")
+    assert persisted["project_id"] == "demo"
     assert persisted["deployment_id"] == payload["deployment_id"]
 
 
