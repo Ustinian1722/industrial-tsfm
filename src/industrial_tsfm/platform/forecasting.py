@@ -3,12 +3,10 @@ from __future__ import annotations
 import time
 from dataclasses import asdict, dataclass
 from datetime import datetime, timezone
-from typing import Any
+from typing import Any, Protocol
 
 import numpy as np
 import pandas as pd
-
-from industrial_tsfm.models.base import ForecastModel
 
 from .runtime import TimeSeriesWindow, WindowProvider
 
@@ -17,8 +15,41 @@ def _utc_now() -> str:
     return datetime.now(timezone.utc).isoformat()
 
 
-def _to_python(value: Any) -> Any:
-    return value.item() if hasattr(value, "item") else value
+class RuntimeForecastModel(Protocol):
+    """Inference surface expected from an already prepared forecast model."""
+
+    name: str
+    training_mode: str
+
+    def predict(self, context: np.ndarray) -> np.ndarray: ...
+
+    def parameter_count(self) -> int | None: ...
+
+    def trainable_parameter_count(self) -> int | None: ...
+
+
+class DeterministicPersistenceForecastModel:
+    """Dependency-free forecast test double used for CI/runtime smoke only."""
+
+    name = "persistence-ci"
+    training_mode = "none"
+
+    def __init__(self, horizon: int) -> None:
+        if horizon < 1:
+            raise ValueError("horizon must be positive")
+        self.horizon = int(horizon)
+
+    def predict(self, context: np.ndarray) -> np.ndarray:
+        values = np.asarray(context, dtype=np.float32)
+        if values.ndim != 3:
+            raise ValueError("context must have shape [batch, context_length, features]")
+        return np.repeat(values[:, -1:, :], self.horizon, axis=1)
+
+    def parameter_count(self) -> int:
+        return 0
+
+    def trainable_parameter_count(self) -> int:
+        return 0
 
 
 @dataclass(frozen=True)
@@ -81,14 +112,21 @@ class ForecastingRecord:
 
 
 class ForecastModelRuntimeAdapter:
-    """Inference-only adapter over the repository's existing ``ForecastModel`` API.
+    """Inference-only adapter over the repository forecast-model contract.
 
     The adapter never calls ``fit``. Loading/fitting/adaptation must happen before
     the model enters the live runtime, preserving the research/evaluation boundary
-    and preventing target-stream labels from changing the model online.
+    and preventing target-stream labels from changing the model online. The
+    platform layer deliberately uses a structural protocol so importing it does
+    not pull heavyweight TSFM/PyTorch dependencies into lightweight services.
     """
 
-    def __init__(self, model: ForecastModel, *, model_metadata: dict[str, Any] | None = None) -> None:
+    def __init__(
+        self,
+        model: RuntimeForecastModel,
+        *,
+        model_metadata: dict[str, Any] | None = None,
+    ) -> None:
         self.model = model
         self.model_metadata = dict(model_metadata or {})
 
