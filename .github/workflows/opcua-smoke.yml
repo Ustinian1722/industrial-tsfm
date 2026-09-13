@@ -17,6 +17,9 @@ on:
       - "src/industrial_tsfm/platform/diagnosis_registry.py"
       - "src/industrial_tsfm/platform/diagnosis_service.py"
       - "src/industrial_tsfm/platform/diagnosis_api.py"
+      - "src/industrial_tsfm/platform/decision_support.py"
+      - "src/industrial_tsfm/platform/decision_support_registry.py"
+      - "src/industrial_tsfm/platform/decision_support_api.py"
       - "src/industrial_tsfm/platform/online_anomaly.py"
       - "src/industrial_tsfm/platform/__init__.py"
       - "scripts/run_opcua_smoke.py"
@@ -32,6 +35,9 @@ on:
       - "tests/test_platform_diagnosis_registry.py"
       - "tests/test_platform_diagnosis_safety.py"
       - "tests/test_platform_diagnosis_service.py"
+      - "tests/test_platform_decision_support.py"
+      - "tests/test_platform_decision_support_registry.py"
+      - "tests/test_platform_decision_support_safety.py"
       - "pyproject.toml"
       - ".github/workflows/opcua-smoke.yml"
   pull_request:
@@ -50,6 +56,9 @@ on:
       - "src/industrial_tsfm/platform/diagnosis_registry.py"
       - "src/industrial_tsfm/platform/diagnosis_service.py"
       - "src/industrial_tsfm/platform/diagnosis_api.py"
+      - "src/industrial_tsfm/platform/decision_support.py"
+      - "src/industrial_tsfm/platform/decision_support_registry.py"
+      - "src/industrial_tsfm/platform/decision_support_api.py"
       - "src/industrial_tsfm/platform/online_anomaly.py"
       - "src/industrial_tsfm/platform/__init__.py"
       - "scripts/run_opcua_smoke.py"
@@ -65,6 +74,9 @@ on:
       - "tests/test_platform_diagnosis_registry.py"
       - "tests/test_platform_diagnosis_safety.py"
       - "tests/test_platform_diagnosis_service.py"
+      - "tests/test_platform_decision_support.py"
+      - "tests/test_platform_decision_support_registry.py"
+      - "tests/test_platform_decision_support_safety.py"
       - "pyproject.toml"
       - ".github/workflows/opcua-smoke.yml"
   workflow_dispatch:
@@ -92,7 +104,7 @@ jobs:
           python -m pip install -e . --no-deps
           python -c "import importlib.metadata as m; print('asyncua=' + m.version('asyncua'))"
 
-      - name: Run OPC-UA, forecasting, and diagnosis boundary tests
+      - name: Run OPC-UA, forecasting, diagnosis, and decision-support boundary tests
         run: |
           python -m pytest -q \
             tests/test_platform_opcua.py \
@@ -106,7 +118,10 @@ jobs:
             tests/test_platform_diagnosis_deployment.py \
             tests/test_platform_diagnosis_registry.py \
             tests/test_platform_diagnosis_safety.py \
-            tests/test_platform_diagnosis_service.py
+            tests/test_platform_diagnosis_service.py \
+            tests/test_platform_decision_support.py \
+            tests/test_platform_decision_support_registry.py \
+            tests/test_platform_decision_support_safety.py
 
       - name: Run real asyncua server/client smoke
         run: python scripts/run_opcua_smoke.py
@@ -119,6 +134,7 @@ jobs:
           test -s results/opcua-smoke/live_runtime.json
           test -s results/opcua-smoke/live_forecast.json
           test -s results/opcua-smoke/live_diagnosis.json
+          test -s results/opcua-smoke/live_decision_support.json
           grep -q '"good_count": 2' results/opcua-smoke/snapshot.json
           grep -q '"authentication": "anonymous"' results/opcua-smoke/snapshot.json
           grep -q '"status": "reconnecting"' results/opcua-smoke/disconnected_runtime.json
@@ -139,6 +155,14 @@ jobs:
           grep -q '"threshold_updated_online": false' results/opcua-smoke/live_diagnosis.json
           grep -q '"control_actions_enabled": false' results/opcua-smoke/live_diagnosis.json
           grep -q '"claim_scope": "statistical_reconstruction_contribution_not_causal_root_cause"' results/opcua-smoke/live_diagnosis.json
+          grep -q '"schema_version": "industrial_tsfm.decision_support.v1"' results/opcua-smoke/live_decision_support.json
+          grep -q '"advisory_only": true' results/opcua-smoke/live_decision_support.json
+          grep -q '"operator_confirmation_required": true' results/opcua-smoke/live_decision_support.json
+          grep -q '"execution_enabled": false' results/opcua-smoke/live_decision_support.json
+          grep -q '"control_actions_enabled": false' results/opcua-smoke/live_decision_support.json
+          grep -q '"opcua_writes_enabled": false' results/opcua-smoke/live_decision_support.json
+          grep -q '"llm_actions_enabled": false' results/opcua-smoke/live_decision_support.json
+          grep -q '"claim_scope": "advisory_evidence_ranking_not_causal_or_control"' results/opcua-smoke/live_decision_support.json
 
       - name: Upload OPC-UA smoke artifact
         uses: actions/upload-artifact@v4
