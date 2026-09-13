@@ -37,6 +37,7 @@ def _iso(value: Any) -> str | None:
 class OPCUALiveState:
     status: str = "created"
     connected: bool = False
+    subscribed_tag_count: int = 0
     connect_attempts: int = 0
     reconnects: int = 0
     disconnects: int = 0
@@ -125,6 +126,7 @@ class OPCUALiveRuntime:
     def _mark_subscription_ready(self) -> None:
         now = _utc_now()
         self.state.connected = True
+        self.state.subscribed_tag_count = len(self.config.node_ids or {})
         self.state.connected_at = now
         if self._ever_connected and self._disconnect_monotonic is not None:
             gap = max(0.0, time.monotonic() - self._disconnect_monotonic)
@@ -189,6 +191,7 @@ class OPCUALiveRuntime:
                     await self._check_connection(client)
         finally:
             self.state.connected = False
+            self.state.subscribed_tag_count = 0
             if subscription is not None:
                 try:
                     if handles is not None:
@@ -231,6 +234,7 @@ class OPCUALiveRuntime:
                     pass
                 backoff = min(backoff * 2.0, self.reconnect_max_seconds)
         self.state.connected = False
+        self.state.subscribed_tag_count = 0
         self._set_status("stopped")
 
     def materialize_window(self, max_observations: int | None = None) -> TimeSeriesWindow:
