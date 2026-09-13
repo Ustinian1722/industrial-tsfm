@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from .diagnosis import DiagnosisRequest, LiveDiagnosisApplication
+from .diagnosis_deployment import DiagnosisDeploymentSpec
 from .diagnosis_registry import LiveDiagnosisRegistry
 from .online_anomaly import PCASPEArtifact
 from .opcua_registry import OPCUALiveRuntimeRegistry
@@ -28,10 +29,7 @@ class _ActiveOPCUADiagnosisWindowProvider:
 
 def register_prepared_live_diagnosis(
     *,
-    application_id: str,
-    project_id: str | None,
-    source_name: str,
-    task_name: str,
+    deployment: DiagnosisDeploymentSpec,
     runtime_id: str,
     artifact: PCASPEArtifact,
     opcua_registry: OPCUALiveRuntimeRegistry,
@@ -44,18 +42,24 @@ def register_prepared_live_diagnosis(
     This live path performs no fitting, threshold updates, adaptation, or control.
     """
 
-    resolved_source = str(source_name).strip()
-    resolved_task = str(task_name).strip()
-    if not resolved_source:
-        raise ValueError("source_name must not be empty")
-    if not resolved_task:
-        raise ValueError("task_name must not be empty")
+    deployment.validate()
+    if tuple(artifact.feature_columns) != tuple(deployment.feature_columns):
+        raise ValueError("diagnosis artifact features do not match deployment feature columns")
+    resolved_request = request or DiagnosisRequest(
+        context_observations=deployment.context_observations,
+        top_k_sensors=deployment.top_k_sensors,
+    )
+    resolved_request.validate()
+    if resolved_request.context_observations != deployment.context_observations:
+        raise ValueError("diagnosis request context does not match deployment")
+    if resolved_request.top_k_sensors != deployment.top_k_sensors:
+        raise ValueError("diagnosis request top_k_sensors does not match deployment")
 
     scope = opcua_registry.runtime_scope(runtime_id)
-    if scope["source_name"] != resolved_source:
-        raise ValueError("runtime source does not match diagnosis source")
-    if project_id is not None and scope["project_id"] != project_id:
-        raise ValueError("runtime project does not match diagnosis project")
+    if scope["source_name"] != deployment.source_name:
+        raise ValueError("runtime source does not match diagnosis deployment")
+    if deployment.project_id is not None and scope["project_id"] != deployment.project_id:
+        raise ValueError("runtime project does not match diagnosis deployment")
 
     runtime_status = opcua_registry.status(runtime_id)
     runtime_state = str(runtime_status.get("state", {}).get("status", "unknown"))
@@ -65,13 +69,13 @@ def register_prepared_live_diagnosis(
         )
     opcua_registry.window_provider(runtime_id)
     provider = _ActiveOPCUADiagnosisWindowProvider(opcua_registry, runtime_id)
-    application = LiveDiagnosisApplication(artifact, request or DiagnosisRequest())
+    application = LiveDiagnosisApplication(artifact, resolved_request)
     return diagnosis_registry.register(
-        application_id=application_id,
+        application_id=deployment.deployment_id,
         runtime_id=runtime_id,
         project_id=scope["project_id"],
-        source_name=resolved_source,
-        task_name=resolved_task,
+        source_name=deployment.source_name,
+        task_name=deployment.task_name,
         application=application,
         provider=provider,
     )
