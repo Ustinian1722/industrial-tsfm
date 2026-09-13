@@ -28,12 +28,15 @@ class ForecastingDeploymentSpec:
     target_labels_used: bool
     window_mode: str
     requires_aligned_rows: bool
+    project_id: str | None = None
     checkpoint_ref: str | None = None
     uq_artifact_ref: str | None = None
 
     def validate(self) -> None:
         if not self.deployment_id.strip():
             raise ValueError("deployment_id must not be empty")
+        if self.project_id is not None and not str(self.project_id).strip():
+            raise ValueError("project_id must not be empty when configured")
         if not self.target_columns:
             raise ValueError("target_columns must not be empty")
         if self.context_length < 1:
@@ -66,6 +69,7 @@ def build_forecasting_deployment_spec(
     task_name: str,
     model_route: dict[str, Any],
     deployment_id: str | None = None,
+    project_id: str | None = None,
     window_mode: str | None = None,
     checkpoint_ref: str | None = None,
     uq_artifact_ref: str | None = None,
@@ -113,6 +117,7 @@ def build_forecasting_deployment_spec(
         target_labels_used=labels_used,
         window_mode=resolved_mode,
         requires_aligned_rows=bool(descriptor.native_multivariate),
+        project_id=str(project_id).strip() if project_id is not None else None,
         checkpoint_ref=checkpoint_ref,
         uq_artifact_ref=uq_artifact_ref,
     )
