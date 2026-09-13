@@ -21,3 +21,8 @@ def test_dashboard_surfaces_analytics_and_runtime_boundaries() -> None:
     assert "forecastAppCount" in html
     assert "no online training, no online model selection and no online UQ calibration" in html
     assert "Irregular cadence never causes invented future timestamps" in html
+    assert "Live Diagnosis" in html
+    assert "/v1/diagnosis/applications" in html
+    assert "diagnosisAppCount" in html
+    assert "not causal root-cause proof" in html
+    assert "no online fitting, threshold updates, artifact adaptation or control actions" in html
