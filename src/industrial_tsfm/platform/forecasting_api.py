@@ -37,6 +37,7 @@ def attach_forecasting_routes(
             "online_calibration": False,
             "window_contract": "WindowProvider",
             "modes": ["per_tag_univariate", "strict_multivariate"],
+            "uq": "optional_frozen_split_conformal",
             "hidden_sorting": False,
             "hidden_interpolation": False,
             "irregular_cadence_timestamp_policy": "do_not_invent_future_timestamps",
@@ -98,7 +99,7 @@ def attach_forecasting_routes(
     @router.post("/forecasting/applications/{application_id}/infer")
     def infer_forecasting_application(application_id: str) -> dict[str, Any]:
         try:
-            return active_registry.infer(application_id).to_dict()
+            return active_registry.infer_payload(application_id)
         except KeyError as exc:
             raise HTTPException(status_code=404, detail="forecasting application not found") from exc
         except (RuntimeError, TypeError, ValueError) as exc:
