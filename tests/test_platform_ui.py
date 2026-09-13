@@ -16,3 +16,8 @@ def test_dashboard_surfaces_analytics_and_runtime_boundaries() -> None:
     assert "OPC-UA writes, setpoint changes and closed-loop control are not exposed" in html
     assert "strictly read-only OPC-UA live acquisition" in html
     assert "MQTT remains contract-only" in html
+    assert "Live Forecasting" in html
+    assert "/v1/forecasting/applications" in html
+    assert "forecastAppCount" in html
+    assert "no online training, no online model selection and no online UQ calibration" in html
+    assert "Irregular cadence never causes invented future timestamps" in html

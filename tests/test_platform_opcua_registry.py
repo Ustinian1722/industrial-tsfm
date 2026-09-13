@@ -31,6 +31,9 @@ class FakeRuntime:
             "writes_enabled": False,
         }
 
+    def materialize_window(self, max_observations=None):
+        return {"max_observations": max_observations, "source": self.source.name}
+
 
 def _source(name: str = "plc") -> DataSourceSpec:
     return DataSourceSpec(
@@ -75,7 +78,7 @@ def test_registry_start_stop_duplicate_guard_and_restart() -> None:
     asyncio.run(scenario())
 
 
-def test_registry_scopes_same_source_name_by_project() -> None:
+def test_registry_scopes_same_source_name_by_project_and_exposes_window_provider() -> None:
     async def scenario() -> None:
         registry = OPCUALiveRuntimeRegistry(runtime_factory=FakeRuntime)
         left = await registry.start(_source(), project_id="project-a")
@@ -84,6 +87,13 @@ def test_registry_scopes_same_source_name_by_project() -> None:
         assert left["project_id"] == "project-a"
         assert right["project_id"] == "project-b"
         assert left["runtime_id"] != right["runtime_id"]
+        assert registry.runtime_scope(left["runtime_id"]) == {
+            "runtime_id": left["runtime_id"],
+            "project_id": "project-a",
+            "source_name": "plc",
+        }
+        provider = registry.window_provider(left["runtime_id"])
+        assert provider.materialize_window(7) == {"max_observations": 7, "source": "plc"}
 
         try:
             await registry.start(_source(), project_id="project-a")

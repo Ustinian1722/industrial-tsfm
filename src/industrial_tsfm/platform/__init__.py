@@ -14,6 +14,26 @@ from .connectors import ConnectorError, LoadedDataSource, load_data_source
 from .contracts import DataSourceKind, DataSourceSpec, ProjectSpec, TaskDefinition, TaskType
 from .data_audit import audit_dataframe
 from .feature_discovery import VariableDiscoveryRequest, discover_variables
+from .forecasting import (
+    DeterministicPersistenceForecastModel,
+    ForecastingRecord,
+    ForecastingRequest,
+    ForecastModelRuntimeAdapter,
+    ForecastPoint,
+    LiveForecastingApplication,
+    RuntimeForecastModel,
+)
+from .forecasting_deployment import (
+    ForecastingDeploymentSpec,
+    build_forecasting_deployment_spec,
+)
+from .forecasting_registry import LiveForecastingRegistry
+from .forecasting_service import register_prepared_live_forecast
+from .forecasting_uq import (
+    ConformalForecastArtifact,
+    apply_conformal_forecast,
+    calibrate_conformal_forecast,
+)
 from .model_catalog import ModelDescriptor, get_model_descriptor, model_catalog
 from .model_router import ProductRoutingRequest, route_task
 from .online_anomaly import (
@@ -60,14 +80,23 @@ from .streaming import (
 __all__ = [
     "AnomalyDetectionRequest",
     "BoundedLiveBuffer",
+    "ConformalForecastArtifact",
     "ConnectorError",
     "CrossSourceShiftRequest",
     "DataReplayRuntime",
     "DataSourceKind",
     "DataSourceSpec",
     "DeterministicLastValuePredictor",
+    "DeterministicPersistenceForecastModel",
     "DistributionShiftRequest",
+    "ForecastModelRuntimeAdapter",
+    "ForecastPoint",
+    "ForecastingDeploymentSpec",
+    "ForecastingRecord",
+    "ForecastingRequest",
     "LagAnalysisRequest",
+    "LiveForecastingApplication",
+    "LiveForecastingRegistry",
     "LiveSample",
     "LoadedDataSource",
     "ModelDescriptor",
@@ -87,6 +116,7 @@ __all__ = [
     "ProjectSpec",
     "ReplayBatch",
     "ReplayConfig",
+    "RuntimeForecastModel",
     "StreamingInferenceEngine",
     "TaskDefinition",
     "TaskType",
@@ -95,10 +125,13 @@ __all__ = [
     "WindowProvider",
     "analyze_distribution_shift",
     "analyze_lagged_relationships",
+    "apply_conformal_forecast",
     "audit_dataframe",
     "browse_opcua_source",
+    "build_forecasting_deployment_spec",
     "build_platform_application",
     "build_platform_report",
+    "calibrate_conformal_forecast",
     "compare_source_distributions",
     "discover_variables",
     "fit_pca_spe_artifact",
@@ -108,6 +141,7 @@ __all__ = [
     "opcua_config_from_source",
     "opcua_public_connection_metadata",
     "read_opcua_snapshot",
+    "register_prepared_live_forecast",
     "route_task",
     "run_pca_spe_anomaly_detection",
     "score_pca_spe_artifact",
