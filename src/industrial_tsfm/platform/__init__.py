@@ -14,6 +14,13 @@ from .connectors import ConnectorError, LoadedDataSource, load_data_source
 from .contracts import DataSourceKind, DataSourceSpec, ProjectSpec, TaskDefinition, TaskType
 from .data_audit import audit_dataframe
 from .feature_discovery import VariableDiscoveryRequest, discover_variables
+from .forecasting import (
+    ForecastingRecord,
+    ForecastingRequest,
+    ForecastModelRuntimeAdapter,
+    ForecastPoint,
+    LiveForecastingApplication,
+)
 from .model_catalog import ModelDescriptor, get_model_descriptor, model_catalog
 from .model_router import ProductRoutingRequest, route_task
 from .online_anomaly import (
@@ -67,7 +74,12 @@ __all__ = [
     "DataSourceSpec",
     "DeterministicLastValuePredictor",
     "DistributionShiftRequest",
+    "ForecastModelRuntimeAdapter",
+    "ForecastPoint",
+    "ForecastingRecord",
+    "ForecastingRequest",
     "LagAnalysisRequest",
+    "LiveForecastingApplication",
     "LiveSample",
     "LoadedDataSource",
     "ModelDescriptor",
