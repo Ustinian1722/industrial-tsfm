@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-from industrial_tsfm.models.naive import NaiveModel
 from industrial_tsfm.platform.forecasting import (
+    DeterministicPersistenceForecastModel,
     ForecastingRequest,
     ForecastModelRuntimeAdapter,
     LiveForecastingApplication,
@@ -11,7 +11,7 @@ from industrial_tsfm.platform.runtime import BoundedLiveBuffer, LiveSample
 
 
 def _app() -> LiveForecastingApplication:
-    model = ForecastModelRuntimeAdapter(NaiveModel().configure(1))
+    model = ForecastModelRuntimeAdapter(DeterministicPersistenceForecastModel(1))
     request = ForecastingRequest(target_columns=("x",), context_length=2, horizon=1)
     return LiveForecastingApplication(model, request)
 
@@ -41,7 +41,7 @@ def test_forecasting_registry_tracks_inference_without_mutating_model() -> None:
 
     assert status["online_training"] is False
     assert status["inference_count"] == 0
-    assert status["model"]["name"] == "naive"
+    assert status["model"]["name"] == "persistence-ci"
 
     record = registry.infer("demo-live-forecast").to_dict()
     assert record["forecasts"][0]["value"] == 2.0
