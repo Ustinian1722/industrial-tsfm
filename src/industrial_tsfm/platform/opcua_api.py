@@ -157,5 +157,5 @@ def create_live_app(
     app = create_base_app(artifact_root=artifact_root, workspace_root=workspace_root)
     workspace = WorkspaceStore(workspace_root)
     attach_opcua_routes(app, workspace, opcua_registry)
-    attach_forecasting_routes(app, forecasting_registry)
+    attach_forecasting_routes(app, workspace, forecasting_registry)
     return app
