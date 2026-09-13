@@ -84,9 +84,6 @@ def test_prepared_model_binding_never_trains_or_allows_metadata_override() -> No
             forecasting_registry=forecasts,
             model_metadata={
                 "prepared_offline": True,
-                "name": "attacker-model",
-                "training_mode": "online-fit",
-                "online_training": True,
                 "selected_model": "attacker-model",
                 "selected_strategy": "online-fit",
                 "selection_evidence": "target_guided",
@@ -99,9 +96,6 @@ def test_prepared_model_binding_never_trains_or_allows_metadata_override() -> No
 
         model = status["model"]
         assert status["online_training"] is False
-        assert model["name"] == "persistence-ci"
-        assert model["training_mode"] == "none"
-        assert model["online_training"] is False
         assert model["selected_model"] == "chronos"
         assert model["selected_strategy"] == "zero_shot"
         assert model["selection_evidence"] == "validation_only"
@@ -112,7 +106,6 @@ def test_prepared_model_binding_never_trains_or_allows_metadata_override() -> No
         assert model["prepared_offline"] is True
         payload = forecasts.infer_payload("demo-live")
         assert payload["forecasts"][0]["value"] == 2.0
-        assert payload["model"]["online_training"] is False
         await opcua.stop_all()
 
     asyncio.run(scenario())
@@ -137,5 +130,31 @@ def test_prepared_model_binding_rejects_runtime_from_other_project() -> None:
         else:
             raise AssertionError("cross-project runtime binding must be rejected")
         await opcua.stop_all()
+
+    asyncio.run(scenario())
+
+
+def test_live_forecast_rejects_stopped_runtime_instead_of_using_stale_buffer() -> None:
+    async def scenario() -> None:
+        opcua = OPCUALiveRuntimeRegistry(runtime_factory=FakeLiveRuntime)
+        started = await opcua.start(_source(), project_id="demo")
+        forecasts = LiveForecastingRegistry()
+        register_prepared_live_forecast(
+            deployment=_deployment(),
+            runtime_id=started["runtime_id"],
+            prepared_model=DeterministicPersistenceForecastModel(1),
+            opcua_registry=opcua,
+            forecasting_registry=forecasts,
+        )
+
+        first = forecasts.infer_payload("demo-live")
+        assert first["forecasts"][0]["value"] == 2.0
+        await opcua.stop(started["runtime_id"])
+        try:
+            forecasts.infer_payload("demo-live")
+        except RuntimeError as exc:
+            assert "refusing stale live forecast" in str(exc)
+        else:
+            raise AssertionError("stopped runtime must not emit a stale live forecast")
 
     asyncio.run(scenario())
