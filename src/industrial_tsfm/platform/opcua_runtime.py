@@ -1,13 +1,21 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 from dataclasses import asdict, dataclass
 from datetime import datetime, timezone
 from typing import Any
 
 from .contracts import DataSourceSpec
-from .opcua import AsyncuaTransport, OPCUAConnectorError, config_from_source, public_connection_metadata
+from .opcua import (
+    AsyncuaTransport,
+    OPCUAConnectorError,
+    config_from_source,
+    public_connection_metadata,
+)
 from .runtime import BoundedLiveBuffer, LiveSample
+
+_LOGGER = logging.getLogger(__name__)
 
 
 def _utc_now() -> str:
@@ -42,7 +50,7 @@ class OPCUALiveState:
 
 
 class _SubscriptionHandler:
-    def __init__(self, runtime: "OPCUALiveRuntime") -> None:
+    def __init__(self, runtime: OPCUALiveRuntime) -> None:
         self.runtime = runtime
 
     def datachange_notification(self, node: Any, value: Any, data: Any) -> None:
@@ -139,16 +147,16 @@ class OPCUALiveRuntime:
                 try:
                     if handles is not None:
                         await subscription.unsubscribe(handles)
-                except Exception:
-                    pass
+                except Exception as exc:  # noqa: BLE001 - cleanup is best effort after link loss
+                    _LOGGER.debug("OPC-UA unsubscribe cleanup failed: %r", exc)
                 try:
                     await subscription.delete()
-                except Exception:
-                    pass
+                except Exception as exc:  # noqa: BLE001 - cleanup is best effort after link loss
+                    _LOGGER.debug("OPC-UA subscription delete cleanup failed: %r", exc)
             try:
                 await client.disconnect()
-            except Exception:
-                pass
+            except Exception as exc:  # noqa: BLE001 - cleanup is best effort after link loss
+                _LOGGER.debug("OPC-UA disconnect cleanup failed: %r", exc)
 
     async def run(self, stop_event: asyncio.Event) -> None:
         if self.state.status == "running":
@@ -170,7 +178,7 @@ class OPCUALiveRuntime:
             except asyncio.CancelledError:
                 self.state.status = "cancelled"
                 raise
-            except Exception as exc:
+            except Exception as exc:  # noqa: BLE001 - reconnect boundary must contain transport failures
                 self.state.last_error = f"{type(exc).__name__}: {exc}"
                 self.state.status = "reconnecting"
                 if ever_connected:
