@@ -161,5 +161,5 @@ def create_live_app(
     workspace = WorkspaceStore(workspace_root)
     attach_opcua_routes(app, workspace, opcua_registry)
     attach_forecasting_routes(app, workspace, forecasting_registry)
-    attach_diagnosis_routes(app, diagnosis_registry)
+    attach_diagnosis_routes(app, workspace, diagnosis_registry)
     return app
