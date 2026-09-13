@@ -41,9 +41,11 @@ This is intentional: the platform must not imply a sampling schedule that was no
 - `target_labels_used = false`;
 - forecasting task with explicit context length and horizon.
 
+The persisted deployment also records the workspace `project_id`. Runtime binding checks both that project ID and the configured source name, preventing a live runtime from another project from being attached accidentally.
+
 The deployment artifact stores references and metadata. It does not load a model or checkpoint itself.
 
-`register_prepared_live_forecast(...)` binds an already prepared model to an OPC-UA runtime through `WindowProvider`. Model preparation remains outside the live inference boundary.
+`register_prepared_live_forecast(...)` binds an already prepared model to an OPC-UA runtime through `WindowProvider`. Model preparation remains outside the live inference boundary. Registration requires an actively running runtime, and the provider re-checks runtime state on every inference. Stopped, failed, starting, or reconnecting runtimes fail closed instead of emitting a forecast from a stale buffer.
 
 ## Uncertainty quantification
 
