@@ -66,5 +66,36 @@ def test_online_pca_spe_consumes_live_window_without_recalibration() -> None:
     assert result["threshold"] == artifact.threshold
     assert result["artifact_fit_rows"] == 32
     assert result["threshold_updated_online"] is False
+    assert result["chronology_valid"] is True
     assert result["window"]["metadata"]["timestamp_sort_applied"] is False
     assert result["window"]["metadata"]["interpolation"] is False
+
+
+def test_online_pca_spe_rejects_out_of_order_runtime_context_by_default() -> None:
+    artifact = fit_pca_spe_artifact(
+        _training_frame(),
+        ("pressure", "temperature"),
+        threshold_quantile=0.95,
+        n_components=1,
+    )
+    live = BoundedLiveBuffer(max_rows=8)
+    live.extend(
+        [
+            LiveSample(tag="pressure", value=0.2, timestamp="2026-01-01T00:00:02Z"),
+            LiveSample(tag="temperature", value=0.4, timestamp="2026-01-01T00:00:02Z"),
+            LiveSample(tag="pressure", value=0.3, timestamp="2026-01-01T00:00:01Z"),
+            LiveSample(tag="temperature", value=0.6, timestamp="2026-01-01T00:00:01Z"),
+        ]
+    )
+    detector = OnlinePCASPEAnomalyDetector(artifact)
+
+    try:
+        detector.infer(live)
+    except ValueError as exc:
+        assert "requires chronological timestamps" in str(exc)
+    else:
+        raise AssertionError("out-of-order online anomaly context must be rejected")
+
+    window = live.materialize_window()
+    assert window.metadata["out_of_order_transitions"] == 1
+    assert window.metadata["timestamp_sort_applied"] is False
