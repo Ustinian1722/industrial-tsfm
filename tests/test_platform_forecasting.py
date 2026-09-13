@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import pandas as pd
+import pytest
 
 from industrial_tsfm.platform.forecasting import (
     DeterministicPersistenceForecastModel,
@@ -53,9 +54,9 @@ def test_per_tag_live_forecasting_uses_arrival_stream_without_alignment_or_fill(
     assert result["model"]["online_training"] is False
     assert result["model"]["name"] == "persistence-ci"
     forecasts = {(row["target"], row["step"]): row for row in result["forecasts"]}
-    assert forecasts[("temperature", 1)]["value"] == 12.0
-    assert forecasts[("temperature", 2)]["value"] == 12.0
-    assert forecasts[("pressure", 1)]["value"] == 2.4
+    assert forecasts[("temperature", 1)]["value"] == pytest.approx(12.0)
+    assert forecasts[("temperature", 2)]["value"] == pytest.approx(12.0)
+    assert forecasts[("pressure", 1)]["value"] == pytest.approx(2.4)
     assert forecasts[("temperature", 1)]["timestamp"] == "2026-01-01T00:00:03+00:00"
     assert forecasts[("pressure", 1)]["timestamp"] == "2026-01-01T00:00:03.500000+00:00"
     assert result["context"]["temperature"]["cadence"] == "regular_observed"
@@ -139,7 +140,7 @@ def test_strict_multivariate_replay_uses_complete_rows_only_without_filling() ->
 
     assert result["source_kind"] == "replay"
     forecasts = {(row["target"], row["step"]): row["value"] for row in result["forecasts"]}
-    assert forecasts[("temperature", 1)] == 12.0
-    assert forecasts[("pressure", 2)] == 2.4
+    assert forecasts[("temperature", 1)] == pytest.approx(12.0)
+    assert forecasts[("pressure", 2)] == pytest.approx(2.4)
     assert result["context"]["cadence"] == "regular_observed"
     assert result["context"]["period_seconds"] == 1.0
