@@ -85,3 +85,33 @@ def test_conformal_apply_rejects_partial_forecast_shape() -> None:
         assert "missing conformal points" in str(exc)
     else:
         raise AssertionError("partial forecast must not receive misleading intervals")
+
+
+def test_conformal_artifact_rejects_malformed_or_unsafe_radii() -> None:
+    malformed = ConformalForecastArtifact(
+        target_columns=("x",),
+        horizon=2,
+        alpha=0.1,
+        radii=((0.5,),),
+        calibration_rows=64,
+    )
+    try:
+        malformed.validate()
+    except ValueError as exc:
+        assert "horizon dimension" in str(exc)
+    else:
+        raise AssertionError("malformed conformal radii must be rejected")
+
+    negative = ConformalForecastArtifact(
+        target_columns=("x",),
+        horizon=1,
+        alpha=0.1,
+        radii=((-0.1,),),
+        calibration_rows=64,
+    )
+    try:
+        negative.validate()
+    except ValueError as exc:
+        assert "non-negative" in str(exc)
+    else:
+        raise AssertionError("negative conformal radii must be rejected")
