@@ -6,9 +6,11 @@ on:
       - "src/industrial_tsfm/platform/opcua.py"
       - "src/industrial_tsfm/platform/opcua_runtime.py"
       - "src/industrial_tsfm/platform/runtime.py"
+      - "src/industrial_tsfm/platform/forecasting.py"
       - "src/industrial_tsfm/platform/__init__.py"
       - "scripts/run_opcua_smoke.py"
       - "tests/test_platform_opcua.py"
+      - "tests/test_platform_forecasting.py"
       - "pyproject.toml"
       - ".github/workflows/opcua-smoke.yml"
   pull_request:
@@ -16,9 +18,11 @@ on:
       - "src/industrial_tsfm/platform/opcua.py"
       - "src/industrial_tsfm/platform/opcua_runtime.py"
       - "src/industrial_tsfm/platform/runtime.py"
+      - "src/industrial_tsfm/platform/forecasting.py"
       - "src/industrial_tsfm/platform/__init__.py"
       - "scripts/run_opcua_smoke.py"
       - "tests/test_platform_opcua.py"
+      - "tests/test_platform_forecasting.py"
       - "pyproject.toml"
       - ".github/workflows/opcua-smoke.yml"
   workflow_dispatch:
@@ -47,7 +51,7 @@ jobs:
           python -c "import importlib.metadata as m; print('asyncua=' + m.version('asyncua'))"
 
       - name: Run OPC-UA unit tests
-        run: python -m pytest -q tests/test_platform_opcua.py
+        run: python -m pytest -q tests/test_platform_opcua.py tests/test_platform_forecasting.py
 
       - name: Run real asyncua server/client smoke
         run: python scripts/run_opcua_smoke.py
@@ -58,6 +62,7 @@ jobs:
           test -s results/opcua-smoke/snapshot.json
           test -s results/opcua-smoke/disconnected_runtime.json
           test -s results/opcua-smoke/live_runtime.json
+          test -s results/opcua-smoke/live_forecast.json
           grep -q '"good_count": 2' results/opcua-smoke/snapshot.json
           grep -q '"authentication": "anonymous"' results/opcua-smoke/snapshot.json
           grep -q '"status": "reconnecting"' results/opcua-smoke/disconnected_runtime.json
@@ -68,6 +73,10 @@ jobs:
           grep -q '"read_only": true' results/opcua-smoke/live_runtime.json
           grep -q '"writes_enabled": false' results/opcua-smoke/live_runtime.json
           grep -q '"status": "stopped"' results/opcua-smoke/live_runtime.json
+          grep -q '"schema_version": "industrial_tsfm.live_forecasting.v1"' results/opcua-smoke/live_forecast.json
+          grep -q '"source_kind": "live"' results/opcua-smoke/live_forecast.json
+          grep -q '"online_training": false' results/opcua-smoke/live_forecast.json
+          grep -q '"name": "persistence-ci"' results/opcua-smoke/live_forecast.json
 
       - name: Upload OPC-UA smoke artifact
         uses: actions/upload-artifact@v4
