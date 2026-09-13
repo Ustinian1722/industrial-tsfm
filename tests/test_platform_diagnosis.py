@@ -55,11 +55,34 @@ def test_live_diagnosis_flags_excursion_without_online_updates() -> None:
     assert payload["score"]["ratio_to_threshold"] >= 1.0
     assert payload["event"]["latest_anomaly"] is True
     assert payload["contributors"]
+    assert payload["detector"]["missing_value_policy"] == "frozen_training_median"
+    assert payload["detector"]["median_imputed_values"] == 0
     assert payload["claim_scope"].endswith("not_causal_root_cause")
     assert payload["online_training"] is False
     assert payload["threshold_updated_online"] is False
     assert payload["online_artifact_updates"] is False
     assert payload["control_actions_enabled"] is False
+
+
+def test_live_diagnosis_reports_frozen_training_median_imputation() -> None:
+    frame = _training_frame(8)
+    frame.loc[6, "y"] = np.nan
+    frame.insert(
+        0,
+        "timestamp",
+        pd.date_range("2026-01-01", periods=len(frame), freq="s", tz="UTC").astype(str),
+    )
+    replay = DataReplayRuntime(frame, ReplayConfig(timestamp_column="timestamp"))
+    app = LiveDiagnosisApplication(
+        _artifact(),
+        DiagnosisRequest(context_observations=8, top_k_sensors=2),
+    )
+
+    payload = app.infer(replay)
+
+    assert payload["detector"]["missing_value_policy"] == "frozen_training_median"
+    assert payload["detector"]["median_imputed_values"] == 1
+    assert payload["detector"]["median_imputed_by_feature"] == {"x": 0, "y": 1}
 
 
 def test_live_diagnosis_rejects_invalid_frozen_artifact() -> None:
