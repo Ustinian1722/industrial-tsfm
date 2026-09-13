@@ -29,7 +29,15 @@ from .opcua import public_connection_metadata as opcua_public_connection_metadat
 from .opcua_registry import OPCUALiveRuntimeRegistry
 from .opcua_runtime import OPCUALiveRuntime, OPCUALiveState
 from .report import build_platform_report
-from .runtime import BoundedLiveBuffer, DataReplayRuntime, LiveSample, ReplayBatch, ReplayConfig
+from .runtime import (
+    BoundedLiveBuffer,
+    DataReplayRuntime,
+    LiveSample,
+    ReplayBatch,
+    ReplayConfig,
+    TimeSeriesWindow,
+    WindowProvider,
+)
 from .shift_analysis import (
     CrossSourceShiftRequest,
     DistributionShiftRequest,
@@ -64,7 +72,9 @@ __all__ = [
     "ReplayConfig",
     "TaskDefinition",
     "TaskType",
+    "TimeSeriesWindow",
     "VariableDiscoveryRequest",
+    "WindowProvider",
     "analyze_distribution_shift",
     "analyze_lagged_relationships",
     "audit_dataframe",
