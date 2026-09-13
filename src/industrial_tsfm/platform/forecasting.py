@@ -132,12 +132,12 @@ class ForecastModelRuntimeAdapter:
 
     def metadata(self) -> dict[str, Any]:
         return {
+            **self.model_metadata,
             "name": getattr(self.model, "name", type(self.model).__name__),
             "training_mode": getattr(self.model, "training_mode", "unknown"),
             "parameter_count": self.model.parameter_count(),
             "trainable_parameter_count": self.model.trainable_parameter_count(),
             "online_training": False,
-            **self.model_metadata,
         }
 
     def predict(self, context: np.ndarray, horizon: int) -> np.ndarray:
