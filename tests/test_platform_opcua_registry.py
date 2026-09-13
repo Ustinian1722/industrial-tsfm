@@ -41,7 +41,7 @@ def _source(name: str = "plc") -> DataSourceSpec:
     )
 
 
-def test_registry_start_stop_and_duplicate_guard() -> None:
+def test_registry_start_stop_duplicate_guard_and_restart() -> None:
     async def scenario() -> None:
         registry = OPCUALiveRuntimeRegistry(runtime_factory=FakeRuntime)
         started = await registry.start(_source())
@@ -61,7 +61,15 @@ def test_registry_start_stop_and_duplicate_guard() -> None:
         stopped = await registry.stop(runtime_id)
         assert stopped["state"]["status"] == "stopped"
         assert stopped["task_done"] is True
+
+        restarted = await registry.start(_source())
+        assert restarted["runtime_id"] != runtime_id
+        assert restarted["task_done"] is False
+        assert len(registry.list()) == 2
+        await registry.stop(restarted["runtime_id"])
+
         registry.remove(runtime_id)
+        registry.remove(restarted["runtime_id"])
         assert registry.list() == []
 
     asyncio.run(scenario())
