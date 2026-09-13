@@ -3,7 +3,7 @@ from __future__ import annotations
 from collections import deque
 from collections.abc import Iterator
 from dataclasses import asdict, dataclass
-from typing import Any
+from typing import Any, Protocol
 
 import pandas as pd
 
@@ -27,6 +27,58 @@ class ReplayBatch:
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
+
+
+@dataclass(frozen=True)
+class TimeSeriesWindow:
+    """Auditable dataframe handoff shared by replay and live runtimes.
+
+    ``frame`` is the model/audit-facing representation. ``arrival_frame`` keeps
+    the observations in the exact order accepted by the runtime so consumers
+    can verify that no timestamp sort, interpolation, or hidden resampling was
+    introduced. ``quality_mask`` is aligned with the feature columns in frame.
+    """
+
+    frame: pd.DataFrame
+    quality_mask: pd.DataFrame
+    arrival_frame: pd.DataFrame
+    source_kind: str
+    timestamp_column: str | None
+    metadata: dict[str, Any]
+
+    def snapshot(self) -> dict[str, Any]:
+        return {
+            "schema_version": "industrial_tsfm.runtime_window.v1",
+            "source_kind": self.source_kind,
+            "rows": len(self.frame),
+            "arrival_rows": len(self.arrival_frame),
+            "columns": [str(column) for column in self.frame.columns],
+            "quality_columns": [str(column) for column in self.quality_mask.columns],
+            "timestamp_column": self.timestamp_column,
+            "metadata": dict(self.metadata),
+        }
+
+
+class WindowProvider(Protocol):
+    """Source-agnostic contract consumed by streaming inference applications."""
+
+    def materialize_window(self, max_observations: int | None = None) -> TimeSeriesWindow: ...
+
+
+def _validate_window_limit(max_observations: int | None) -> None:
+    if max_observations is not None and max_observations < 1:
+        raise ValueError("max_observations must be positive when configured")
+
+
+def _time_order_evidence(values: pd.Series) -> dict[str, Any]:
+    parsed = pd.to_datetime(values, errors="coerce", utc=True)
+    valid = parsed.dropna()
+    diffs = valid.diff().dropna()
+    return {
+        "parse_failures": int(parsed.isna().sum()),
+        "out_of_order_transitions": int((diffs < pd.Timedelta(0)).sum()),
+        "duplicate_timestamps": int(valid.duplicated().sum()),
+    }
 
 
 class DataReplayRuntime:
@@ -63,6 +115,44 @@ class DataReplayRuntime:
                 row_end=end,
                 records=records,
             )
+
+    def materialize_window(self, max_observations: int | None = None) -> TimeSeriesWindow:
+        """Return the latest replay rows without changing their input order."""
+
+        _validate_window_limit(max_observations)
+        start = 0 if max_observations is None else max(0, len(self.frame) - max_observations)
+        frame = self.frame.iloc[start:].reset_index(drop=True).copy()
+        arrival_frame = frame.copy()
+        arrival_frame.insert(0, "arrival_index", range(start, start + len(frame)))
+        feature_columns = [
+            column for column in frame.columns if column != self.config.timestamp_column
+        ]
+        quality_mask = frame[feature_columns].notna().copy()
+        time_evidence: dict[str, Any] = {
+            "parse_failures": 0,
+            "out_of_order_transitions": 0,
+            "duplicate_timestamps": 0,
+        }
+        if self.config.timestamp_column:
+            time_evidence = _time_order_evidence(frame[self.config.timestamp_column])
+        metadata = {
+            "source_rows": len(frame),
+            "source_row_start": start,
+            "preserves_arrival_order": True,
+            "timestamp_sort_applied": False,
+            "resampling": False,
+            "interpolation": False,
+            "coalescing": "none",
+            **time_evidence,
+        }
+        return TimeSeriesWindow(
+            frame=frame,
+            quality_mask=quality_mask,
+            arrival_frame=arrival_frame,
+            source_kind="replay",
+            timestamp_column=self.config.timestamp_column,
+            metadata=metadata,
+        )
 
     def snapshot(self, preview_batches: int = 2) -> dict[str, Any]:
         if preview_batches < 0:
@@ -164,6 +254,92 @@ class BoundedLiveBuffer:
         for sample in self._rows:
             latest[sample.tag] = sample.to_dict()
         return latest
+
+    def materialize_window(self, max_observations: int | None = None) -> TimeSeriesWindow:
+        """Create a wide chronological *evidence* window without sorting timestamps.
+
+        Samples are consumed strictly in callback arrival order. Adjacent samples
+        with the same effective timestamp are coalesced only when they refer to
+        different tags. A repeated tag at the same timestamp starts a new output
+        row rather than overwriting an earlier sample. This preserves every
+        accepted observation while making a dataframe suitable for Data Audit and
+        downstream inference. Missing tags remain missing; no interpolation or
+        forward fill is performed.
+        """
+
+        _validate_window_limit(max_observations)
+        buffered = list(self._rows)
+        absolute_start = self.received_rows - len(buffered)
+        if max_observations is not None and len(buffered) > max_observations:
+            trim = len(buffered) - max_observations
+            buffered = buffered[trim:]
+            absolute_start += trim
+
+        arrival_records: list[dict[str, Any]] = []
+        for offset, sample in enumerate(buffered):
+            record = sample.to_dict()
+            record["arrival_index"] = absolute_start + offset
+            arrival_records.append(record)
+        arrival_frame = pd.DataFrame(arrival_records)
+
+        tags = list(dict.fromkeys(sample.tag for sample in buffered))
+        wide_rows: list[dict[str, Any]] = []
+        quality_rows: list[dict[str, bool]] = []
+        current_timestamp: str | None = None
+        current_values: dict[str, Any] = {}
+        current_quality: dict[str, bool] = {}
+
+        def flush() -> None:
+            if current_timestamp is None:
+                return
+            row: dict[str, Any] = {"timestamp": current_timestamp}
+            row.update(current_values)
+            wide_rows.append(row)
+            quality_rows.append({tag: bool(current_quality.get(tag, False)) for tag in tags})
+
+        for sample in buffered:
+            should_flush = current_timestamp is not None and (
+                sample.timestamp != current_timestamp or sample.tag in current_values
+            )
+            if should_flush:
+                flush()
+                current_values = {}
+                current_quality = {}
+            if current_timestamp is None or should_flush:
+                current_timestamp = sample.timestamp
+            current_values[sample.tag] = sample.value
+            current_quality[sample.tag] = sample.status_good
+        flush()
+
+        frame = pd.DataFrame(wide_rows, columns=["timestamp", *tags])
+        quality_mask = pd.DataFrame(quality_rows, columns=tags, dtype=bool)
+        time_evidence: dict[str, Any] = {
+            "parse_failures": 0,
+            "out_of_order_transitions": 0,
+            "duplicate_timestamps": 0,
+        }
+        if not frame.empty:
+            time_evidence = _time_order_evidence(frame["timestamp"])
+        metadata = {
+            "source_rows": len(buffered),
+            "buffer_received_rows": self.received_rows,
+            "buffer_dropped_rows": self.dropped_rows,
+            "preserves_arrival_order": True,
+            "timestamp_sort_applied": False,
+            "resampling": False,
+            "interpolation": False,
+            "coalescing": "contiguous_equal_timestamp_distinct_tags_only",
+            "bad_quality_observations": sum(int(not sample.status_good) for sample in buffered),
+            **time_evidence,
+        }
+        return TimeSeriesWindow(
+            frame=frame,
+            quality_mask=quality_mask,
+            arrival_frame=arrival_frame,
+            source_kind="live",
+            timestamp_column="timestamp",
+            metadata=metadata,
+        )
 
     def snapshot(self) -> dict[str, Any]:
         rows = list(self._rows)
