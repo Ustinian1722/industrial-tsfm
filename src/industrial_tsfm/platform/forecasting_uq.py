@@ -24,7 +24,30 @@ class ConformalForecastArtifact:
     calibration_rows: int
     calibration_scope: str = "offline_calibration_only"
 
+    def validate(self) -> None:
+        if not self.target_columns:
+            raise ValueError("conformal artifact target_columns must not be empty")
+        if len(set(self.target_columns)) != len(self.target_columns):
+            raise ValueError("conformal artifact target_columns must be unique")
+        if self.horizon < 1:
+            raise ValueError("conformal artifact horizon must be positive")
+        if not 0.0 < self.alpha < 1.0:
+            raise ValueError("conformal artifact alpha must be in (0, 1)")
+        if self.calibration_rows < 1:
+            raise ValueError("conformal artifact calibration_rows must be positive")
+        if self.calibration_scope != "offline_calibration_only":
+            raise ValueError("conformal artifact must use offline_calibration_only scope")
+        if len(self.radii) != len(self.target_columns):
+            raise ValueError("conformal artifact radii target dimension mismatch")
+        for row in self.radii:
+            if len(row) != self.horizon:
+                raise ValueError("conformal artifact radii horizon dimension mismatch")
+            values = np.asarray(row, dtype=float)
+            if not bool(np.isfinite(values).all()) or bool((values < 0.0).any()):
+                raise ValueError("conformal artifact radii must be finite and non-negative")
+
     def to_dict(self) -> dict[str, Any]:
+        self.validate()
         payload = asdict(self)
         payload["schema_version"] = "industrial_tsfm.forecast_conformal.v1"
         payload["nominal_coverage"] = 1.0 - self.alpha
@@ -34,7 +57,7 @@ class ConformalForecastArtifact:
 
     @classmethod
     def from_dict(cls, payload: dict[str, Any]) -> ConformalForecastArtifact:
-        return cls(
+        artifact = cls(
             target_columns=tuple(str(value) for value in payload["target_columns"]),
             horizon=int(payload["horizon"]),
             alpha=float(payload["alpha"]),
@@ -42,6 +65,8 @@ class ConformalForecastArtifact:
             calibration_rows=int(payload["calibration_rows"]),
             calibration_scope=str(payload.get("calibration_scope", "offline_calibration_only")),
         )
+        artifact.validate()
+        return artifact
 
 
 def _finite_sample_radius(residuals: np.ndarray, alpha: float) -> float:
@@ -85,6 +110,8 @@ def calibrate_conformal_forecast(
         raise ValueError("target_columns does not match calibration target dimension")
     if not target_columns:
         raise ValueError("target_columns must not be empty")
+    if len(set(target_columns)) != len(target_columns):
+        raise ValueError("target_columns must be unique")
     residuals = np.abs(y - yhat)
     if not np.isfinite(residuals).all():
         raise ValueError("calibration residuals must be finite")
@@ -96,13 +123,15 @@ def calibrate_conformal_forecast(
                 for step in range(y.shape[1])
             )
         )
-    return ConformalForecastArtifact(
+    artifact = ConformalForecastArtifact(
         target_columns=tuple(target_columns),
         horizon=int(y.shape[1]),
         alpha=float(alpha),
         radii=tuple(radii),
         calibration_rows=int(y.shape[0]),
     )
+    artifact.validate()
+    return artifact
 
 
 def apply_conformal_forecast(
@@ -111,6 +140,7 @@ def apply_conformal_forecast(
 ) -> dict[str, Any]:
     """Attach frozen symmetric intervals to a forecasting record."""
 
+    artifact.validate()
     payload = record.to_dict() if isinstance(record, ForecastingRecord) else dict(record)
     forecasts = payload.get("forecasts")
     if not isinstance(forecasts, list):
