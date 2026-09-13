@@ -58,6 +58,7 @@ def test_build_diagnosis_deployment_uses_project_and_task_contract() -> None:
     assert payload["context_observations"] == 48
     assert payload["top_k_sensors"] == 2
     assert payload["fit_scope"] == "offline_training_or_calibration_only"
+    assert payload["missing_value_policy"] == "frozen_training_median"
     assert payload["target_labels_used"] is False
     assert payload["online_training"] is False
     assert payload["threshold_updates"] is False
@@ -89,6 +90,7 @@ def test_diagnosis_deployment_rejects_online_or_label_guided_contract() -> None:
     for invalid in (
         replace(spec, target_labels_used=True),
         replace(spec, fit_scope="online_live_fit"),
+        replace(spec, missing_value_policy="live_window_median"),
     ):
         try:
             invalid.validate()
