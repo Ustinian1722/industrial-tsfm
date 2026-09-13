@@ -24,7 +24,7 @@ A `DecisionPolicy` contains three transparent objects:
 
 Supported forecast metrics are `min`, `max`, `mean`, `last`, `lower_min`, and `upper_max` for one named forecast target. Supported diagnosis metrics are `severity`, `ratio_to_threshold`, `trailing_anomaly_points`, and `latest_anomaly`.
 
-A scenario may also define guardrails. If any guardrail is unavailable or false, the scenario is ineligible. Missing forecast intervals therefore do not silently satisfy rules that require `lower_min` or `upper_max`.
+A scenario may also define guardrails. If any guardrail is unavailable or false, the scenario is ineligible. Missing forecast intervals therefore do not silently satisfy rules that require `lower_min` or `upper_max`. For auditability, an available-but-false condition still reports its observed value; genuinely unavailable evidence reports `available=false` and `observed_value=null`.
 
 The final ordering is deterministic:
 
@@ -46,7 +46,7 @@ Registration and every evaluation verify that both evidence applications share t
 
 Each evaluation requests fresh evidence from both registries. Their own live services continue to enforce the active-runtime and stale-buffer checks already frozen in Live Forecasting V1 and Live Diagnosis V1.
 
-Decision Support V1 additionally checks the two `observed_through` timestamps. If their absolute skew exceeds the policy's `max_observation_skew_seconds`, evaluation fails closed instead of ranking scenarios from temporally mismatched evidence.
+Decision Support V1 also requires forecast and diagnosis evidence to report the same non-empty `source_kind`; mixed live/replay evidence fails closed. It additionally checks the two `observed_through` timestamps. If their absolute skew exceeds the policy's `max_observation_skew_seconds`, evaluation fails closed instead of ranking scenarios from temporally mismatched evidence.
 
 ## Scenario semantics
 
@@ -73,7 +73,7 @@ claim_scope = advisory_evidence_ranking_not_causal_or_control
 
 A later optimization or digital-twin layer may provide modeled counterfactual outcomes, but that is outside V1.
 
-## API
+## API and Studio
 
 The live application exposes:
 
@@ -85,6 +85,8 @@ The live application exposes:
 - `DELETE /v1/decision-support/applications/{application_id}`
 
 Policy registration persists a transparent JSON binding in the workspace. No training, calibration, model selection, online learning, or optimization is performed during registration.
+
+IndusTSFM Studio exposes a read-only **Decision Support** operator panel showing application/project/source/runtime/policy bindings, evaluation count, last status, top recommended scenario and an explicit `Evaluate` action. The preview displays the full auditable JSON result. It does not expose an Execute, Apply, Write, Setpoint, or Agent action.
 
 ## Frozen safety properties
 
