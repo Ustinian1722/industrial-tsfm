@@ -61,10 +61,11 @@ class LiveForecastingRegistry:
         if not hasattr(provider, "materialize_window"):
             raise TypeError("provider must implement WindowProvider")
         if uq_artifact is not None:
+            uq_artifact.validate()
             request = application.request
             if tuple(uq_artifact.target_columns) != tuple(request.target_columns):
                 raise ValueError("UQ artifact targets do not match forecasting request")
-            if int(uq_artifact.horizon) != int(request.horizon):
+            if uq_artifact.horizon != request.horizon:
                 raise ValueError("UQ artifact horizon does not match forecasting request")
         self._entries[resolved_id] = _ForecastingEntry(
             application_id=resolved_id,
