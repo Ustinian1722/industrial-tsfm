@@ -7,6 +7,7 @@ import pandas as pd
 
 from industrial_tsfm.platform.contracts import DataSourceKind, DataSourceSpec
 from industrial_tsfm.platform.diagnosis import DiagnosisRequest
+from industrial_tsfm.platform.diagnosis_deployment import DiagnosisDeploymentSpec
 from industrial_tsfm.platform.diagnosis_registry import LiveDiagnosisRegistry
 from industrial_tsfm.platform.diagnosis_service import register_prepared_live_diagnosis
 from industrial_tsfm.platform.online_anomaly import fit_pca_spe_artifact
@@ -73,16 +74,27 @@ def _artifact():
     )
 
 
+def _deployment(project_id: str = "demo") -> DiagnosisDeploymentSpec:
+    return DiagnosisDeploymentSpec(
+        deployment_id="demo-diagnosis",
+        project_name="Demo",
+        project_id=project_id,
+        source_name="plc",
+        task_name="detect-process",
+        feature_columns=("x", "y"),
+        context_observations=16,
+        top_k_sensors=2,
+        artifact_ref="workspace://demo/pca-spe.json",
+    )
+
+
 def test_live_diagnosis_binding_is_inference_only_and_project_scoped() -> None:
     async def scenario() -> None:
         opcua = OPCUALiveRuntimeRegistry(runtime_factory=FakeDiagnosisRuntime)
         started = await opcua.start(_source(), project_id="demo")
         diagnoses = LiveDiagnosisRegistry()
         status = register_prepared_live_diagnosis(
-            application_id="demo-diagnosis",
-            project_id="demo",
-            source_name="plc",
-            task_name="detect-process",
+            deployment=_deployment(),
             runtime_id=started["runtime_id"],
             artifact=_artifact(),
             opcua_registry=opcua,
@@ -109,10 +121,7 @@ def test_live_diagnosis_rejects_cross_project_runtime() -> None:
         diagnoses = LiveDiagnosisRegistry()
         try:
             register_prepared_live_diagnosis(
-                application_id="demo-diagnosis",
-                project_id="demo",
-                source_name="plc",
-                task_name="detect-process",
+                deployment=_deployment(project_id="demo"),
                 runtime_id=started["runtime_id"],
                 artifact=_artifact(),
                 opcua_registry=opcua,
@@ -133,10 +142,7 @@ def test_live_diagnosis_rejects_stopped_runtime_instead_of_stale_buffer() -> Non
         started = await opcua.start(_source(), project_id="demo")
         diagnoses = LiveDiagnosisRegistry()
         register_prepared_live_diagnosis(
-            application_id="demo-diagnosis",
-            project_id="demo",
-            source_name="plc",
-            task_name="detect-process",
+            deployment=_deployment(),
             runtime_id=started["runtime_id"],
             artifact=_artifact(),
             opcua_registry=opcua,
@@ -151,5 +157,37 @@ def test_live_diagnosis_rejects_stopped_runtime_instead_of_stale_buffer() -> Non
             assert "refusing stale live diagnosis" in str(exc)
         else:
             raise AssertionError("stopped runtime must not emit stale diagnosis")
+
+    asyncio.run(scenario())
+
+
+def test_live_diagnosis_rejects_artifact_feature_mismatch() -> None:
+    async def scenario() -> None:
+        opcua = OPCUALiveRuntimeRegistry(runtime_factory=FakeDiagnosisRuntime)
+        started = await opcua.start(_source(), project_id="demo")
+        diagnoses = LiveDiagnosisRegistry()
+        deployment = DiagnosisDeploymentSpec(
+            deployment_id="demo-diagnosis",
+            project_name="Demo",
+            project_id="demo",
+            source_name="plc",
+            task_name="detect-process",
+            feature_columns=("y", "x"),
+            context_observations=16,
+            top_k_sensors=2,
+        )
+        try:
+            register_prepared_live_diagnosis(
+                deployment=deployment,
+                runtime_id=started["runtime_id"],
+                artifact=_artifact(),
+                opcua_registry=opcua,
+                diagnosis_registry=diagnoses,
+            )
+        except ValueError as exc:
+            assert "artifact features" in str(exc)
+        else:
+            raise AssertionError("artifact/deployment feature mismatch must be rejected")
+        await opcua.stop_all()
 
     asyncio.run(scenario())
