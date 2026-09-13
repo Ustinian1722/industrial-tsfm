@@ -16,6 +16,12 @@ from .data_audit import audit_dataframe
 from .feature_discovery import VariableDiscoveryRequest, discover_variables
 from .model_catalog import ModelDescriptor, get_model_descriptor, model_catalog
 from .model_router import ProductRoutingRequest, route_task
+from .online_anomaly import (
+    OnlinePCASPEAnomalyDetector,
+    PCASPEArtifact,
+    fit_pca_spe_artifact,
+    score_pca_spe_artifact,
+)
 from .opcua import (
     OPCUAConnectionConfig,
     OPCUAConnectorError,
@@ -44,6 +50,12 @@ from .shift_analysis import (
     analyze_distribution_shift,
     compare_source_distributions,
 )
+from .streaming import (
+    DeterministicLastValuePredictor,
+    PredictionRecord,
+    Predictor,
+    StreamingInferenceEngine,
+)
 
 __all__ = [
     "AnomalyDetectionRequest",
@@ -53,6 +65,7 @@ __all__ = [
     "DataReplayRuntime",
     "DataSourceKind",
     "DataSourceSpec",
+    "DeterministicLastValuePredictor",
     "DistributionShiftRequest",
     "LagAnalysisRequest",
     "LiveSample",
@@ -65,11 +78,16 @@ __all__ = [
     "OPCUALiveState",
     "OPCUASample",
     "OPCUATag",
+    "OnlinePCASPEAnomalyDetector",
+    "PCASPEArtifact",
     "PlatformApplication",
+    "PredictionRecord",
+    "Predictor",
     "ProductRoutingRequest",
     "ProjectSpec",
     "ReplayBatch",
     "ReplayConfig",
+    "StreamingInferenceEngine",
     "TaskDefinition",
     "TaskType",
     "TimeSeriesWindow",
@@ -83,6 +101,7 @@ __all__ = [
     "build_platform_report",
     "compare_source_distributions",
     "discover_variables",
+    "fit_pca_spe_artifact",
     "get_model_descriptor",
     "load_data_source",
     "model_catalog",
@@ -91,4 +110,5 @@ __all__ = [
     "read_opcua_snapshot",
     "route_task",
     "run_pca_spe_anomaly_detection",
+    "score_pca_spe_artifact",
 ]
