@@ -19,6 +19,7 @@ class DiagnosisDeploymentSpec:
     top_k_sensors: int
     artifact_ref: str | None = None
     fit_scope: str = "offline_training_or_calibration_only"
+    missing_value_policy: str = "frozen_training_median"
     target_labels_used: bool = False
 
     def validate(self) -> None:
@@ -40,6 +41,8 @@ class DiagnosisDeploymentSpec:
         ).validate()
         if self.fit_scope != "offline_training_or_calibration_only":
             raise ValueError("diagnosis deployment must use offline-fitted artifact scope")
+        if self.missing_value_policy != "frozen_training_median":
+            raise ValueError("diagnosis deployment must use the explicit frozen training-median policy")
         if self.target_labels_used:
             raise ValueError("diagnosis deployment cannot depend on target labels")
 
