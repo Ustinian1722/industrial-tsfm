@@ -1,8 +1,9 @@
 from __future__ import annotations
 
 import asyncio
+from collections.abc import Callable
 from dataclasses import dataclass
-from typing import Any, Callable
+from typing import Any
 
 from .contracts import DataSourceSpec
 from .opcua_runtime import OPCUALiveRuntime
@@ -99,7 +100,7 @@ class OPCUALiveRuntimeRegistry:
         for runtime_id in list(self._entries):
             try:
                 await self.stop(runtime_id)
-            except Exception:
+            except Exception:  # noqa: BLE001 - shutdown must make a best effort for every runtime
                 entry = self._entries[runtime_id]
                 if not entry.task.done():
                     entry.task.cancel()
