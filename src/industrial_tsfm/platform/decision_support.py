@@ -207,7 +207,9 @@ class DecisionPolicy:
             "operator_confirmation_required": True,
             "execution_enabled": False,
             "control_actions_enabled": False,
+            "opcua_writes_enabled": False,
             "online_learning": False,
+            "llm_actions_enabled": False,
         }
 
 
@@ -329,42 +331,47 @@ def _diagnosis_summary(payload: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def _condition_value(
-    condition: EvidenceCondition,
-    forecast: dict[str, dict[str, float]],
-    diagnosis: dict[str, Any],
-) -> tuple[bool, Any]:
-    condition.validate()
-    if condition.source == "forecast":
-        target = str(condition.target)
-        if target not in forecast or condition.metric not in forecast[target]:
-            return False, None
-        left: Any = forecast[target][condition.metric]
-        right: Any = float(condition.value)
-    elif condition.metric == "severity":
-        left = int(diagnosis["severity_rank"])
-        right = _SEVERITY_RANK[str(condition.value)]
-    elif condition.metric == "latest_anomaly":
-        left = bool(diagnosis["latest_anomaly"])
-        right = bool(condition.value)
-    else:
-        left = diagnosis[condition.metric]
-        right = float(condition.value)
-    return True, left if _compare(left, condition.operator, right) else None
-
-
 def _condition_result(
     condition: EvidenceCondition,
     forecast: dict[str, dict[str, float]],
     diagnosis: dict[str, Any],
 ) -> dict[str, Any]:
-    available, matched_value = _condition_value(condition, forecast, diagnosis)
-    matched = available and matched_value is not None
+    condition.validate()
+    available = True
+    if condition.source == "forecast":
+        target = str(condition.target)
+        if target not in forecast or condition.metric not in forecast[target]:
+            available = False
+            observed: Any = None
+            expected: Any = float(condition.value)
+        else:
+            observed = forecast[target][condition.metric]
+            expected = float(condition.value)
+    elif condition.metric == "severity":
+        observed = str(diagnosis["severity"])
+        expected = str(condition.value)
+    elif condition.metric == "latest_anomaly":
+        observed = bool(diagnosis["latest_anomaly"])
+        expected = bool(condition.value)
+    else:
+        observed = diagnosis[condition.metric]
+        expected = float(condition.value)
+
+    if not available:
+        matched = False
+    elif condition.metric == "severity":
+        matched = _compare(
+            _SEVERITY_RANK[str(observed)],
+            condition.operator,
+            _SEVERITY_RANK[str(expected)],
+        )
+    else:
+        matched = _compare(observed, condition.operator, expected)
     return {
         "condition": condition.to_dict(),
         "available": available,
         "matched": matched,
-        "observed_value": matched_value if matched else None,
+        "observed_value": observed if available else None,
     }
 
 
@@ -382,6 +389,13 @@ class DecisionSupportApplication:
     ) -> dict[str, Any]:
         if not isinstance(forecast_payload, dict) or not isinstance(diagnosis_payload, dict):
             raise TypeError("forecast and diagnosis evidence must be objects")
+        forecast_kind = str(forecast_payload.get("source_kind", "")).strip()
+        diagnosis_kind = str(diagnosis_payload.get("source_kind", "")).strip()
+        if not forecast_kind or not diagnosis_kind or forecast_kind != diagnosis_kind:
+            raise RuntimeError(
+                "decision support refused mixed evidence source kinds: "
+                f"forecast={forecast_kind or 'missing'}, diagnosis={diagnosis_kind or 'missing'}"
+            )
         forecast = _forecast_summary(forecast_payload)
         diagnosis = _diagnosis_summary(diagnosis_payload)
         forecast_cutoff = forecast_payload.get("observed_through")
@@ -447,15 +461,16 @@ class DecisionSupportApplication:
             "status": "recommendation_available" if top is not None else "operator_review_required",
             "policy_id": self.policy.policy_id,
             "evidence": {
+                "source_kind": forecast_kind,
                 "forecast": {
                     "schema_version": forecast_payload.get("schema_version"),
-                    "source_kind": forecast_payload.get("source_kind"),
+                    "source_kind": forecast_kind,
                     "observed_through": forecast_cutoff,
                     "summary": forecast,
                 },
                 "diagnosis": {
                     "schema_version": diagnosis_payload.get("schema_version"),
-                    "source_kind": diagnosis_payload.get("source_kind"),
+                    "source_kind": diagnosis_kind,
                     "observed_through": diagnosis_cutoff,
                     "summary": diagnosis,
                 },
