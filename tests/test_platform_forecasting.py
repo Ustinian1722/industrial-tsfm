@@ -2,8 +2,8 @@ from __future__ import annotations
 
 import pandas as pd
 
-from industrial_tsfm.models.naive import NaiveModel
 from industrial_tsfm.platform.forecasting import (
+    DeterministicPersistenceForecastModel,
     ForecastingRequest,
     ForecastModelRuntimeAdapter,
     LiveForecastingApplication,
@@ -16,9 +16,9 @@ from industrial_tsfm.platform.runtime import (
 )
 
 
-def _naive(horizon: int) -> ForecastModelRuntimeAdapter:
+def _persistence(horizon: int) -> ForecastModelRuntimeAdapter:
     return ForecastModelRuntimeAdapter(
-        NaiveModel().configure(horizon),
+        DeterministicPersistenceForecastModel(horizon),
         model_metadata={"checkpoint": "none", "selection_evidence": "ci_fixture"},
     )
 
@@ -36,7 +36,7 @@ def test_per_tag_live_forecasting_uses_arrival_stream_without_alignment_or_fill(
         ]
     )
     app = LiveForecastingApplication(
-        _naive(2),
+        _persistence(2),
         ForecastingRequest(
             target_columns=("temperature", "pressure"),
             context_length=3,
@@ -51,7 +51,7 @@ def test_per_tag_live_forecasting_uses_arrival_stream_without_alignment_or_fill(
     assert result["source_kind"] == "live"
     assert result["online_training"] is False
     assert result["model"]["online_training"] is False
-    assert result["model"]["name"] == "naive"
+    assert result["model"]["name"] == "persistence-ci"
     forecasts = {(row["target"], row["step"]): row for row in result["forecasts"]}
     assert forecasts[("temperature", 1)]["value"] == 12.0
     assert forecasts[("temperature", 2)]["value"] == 12.0
@@ -72,7 +72,7 @@ def test_irregular_live_cadence_does_not_invent_future_timestamps() -> None:
         ]
     )
     app = LiveForecastingApplication(
-        _naive(2),
+        _persistence(2),
         ForecastingRequest(target_columns=("x",), context_length=3, horizon=2),
     )
 
@@ -98,7 +98,7 @@ def test_bad_quality_live_context_is_rejected_by_default() -> None:
         ]
     )
     app = LiveForecastingApplication(
-        _naive(1),
+        _persistence(1),
         ForecastingRequest(target_columns=("x",), context_length=2, horizon=1),
     )
 
@@ -126,7 +126,7 @@ def test_strict_multivariate_replay_uses_complete_rows_only_without_filling() ->
         ReplayConfig(timestamp_column="timestamp"),
     )
     app = LiveForecastingApplication(
-        _naive(2),
+        _persistence(2),
         ForecastingRequest(
             target_columns=("temperature", "pressure"),
             context_length=3,
