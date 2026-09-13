@@ -49,7 +49,7 @@ def _finite_sample_radius(residuals: np.ndarray, alpha: float) -> float:
     values = values[np.isfinite(values)]
     if not len(values):
         raise ValueError("conformal calibration residuals are empty")
-    rank = int(math.ceil((len(values) + 1) * (1.0 - alpha)))
+    rank = math.ceil((len(values) + 1) * (1.0 - alpha))
     rank = min(max(rank, 1), len(values))
     ordered = np.sort(values)
     return float(ordered[rank - 1])
@@ -114,7 +114,7 @@ def apply_conformal_forecast(
     payload = record.to_dict() if isinstance(record, ForecastingRecord) else dict(record)
     forecasts = payload.get("forecasts")
     if not isinstance(forecasts, list):
-        raise ValueError("forecast record must contain a forecasts list")
+        raise TypeError("forecast record must contain a forecasts list")
     radius_by_key = {
         (target, step + 1): artifact.radii[target_index][step]
         for target_index, target in enumerate(artifact.target_columns)
