@@ -35,25 +35,21 @@ def register_prepared_live_forecast(
     scope = opcua_registry.runtime_scope(runtime_id)
     if scope["source_name"] != deployment.source_name:
         raise ValueError("runtime source does not match forecasting deployment")
-    runtime_project = scope["project_id"]
-    if runtime_project is not None and runtime_project != deployment.project_name:
-        # Project IDs and display names may differ. Callers that use workspace IDs
-        # should pass the ID through model_metadata and use the explicit check below.
-        expected_project_id = None
-        if model_metadata is not None:
-            expected_project_id = model_metadata.get("project_id")
-        if expected_project_id is not None and runtime_project != str(expected_project_id):
-            raise ValueError("runtime project does not match forecasting deployment")
+    if deployment.project_id is not None and scope["project_id"] != deployment.project_id:
+        raise ValueError("runtime project does not match forecasting deployment")
 
     provider = opcua_registry.window_provider(runtime_id)
     metadata = {
+        **dict(model_metadata or {}),
         "selected_model": deployment.selected_model,
         "selected_strategy": deployment.selected_strategy,
         "selection_evidence": deployment.selection_evidence,
         "target_labels_used": deployment.target_labels_used,
         "checkpoint_ref": deployment.checkpoint_ref,
         "deployment_id": deployment.deployment_id,
-        **dict(model_metadata or {}),
+        "project_id": deployment.project_id,
+        "source_name": deployment.source_name,
+        "task_name": deployment.task_name,
     }
     application = LiveForecastingApplication(
         ForecastModelRuntimeAdapter(prepared_model, model_metadata=metadata),
