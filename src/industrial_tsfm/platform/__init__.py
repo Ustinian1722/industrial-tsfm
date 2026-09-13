@@ -14,6 +14,7 @@ from .connectors import ConnectorError, LoadedDataSource, load_data_source
 from .contracts import DataSourceKind, DataSourceSpec, ProjectSpec, TaskDefinition, TaskType
 from .data_audit import audit_dataframe
 from .diagnosis import DiagnosisRequest, LiveDiagnosisApplication
+from .diagnosis_deployment import DiagnosisDeploymentSpec, build_diagnosis_deployment_spec
 from .diagnosis_registry import LiveDiagnosisRegistry
 from .diagnosis_service import register_prepared_live_diagnosis
 from .feature_discovery import VariableDiscoveryRequest, discover_variables
@@ -91,6 +92,7 @@ __all__ = [
     "DataSourceSpec",
     "DeterministicLastValuePredictor",
     "DeterministicPersistenceForecastModel",
+    "DiagnosisDeploymentSpec",
     "DiagnosisRequest",
     "DistributionShiftRequest",
     "ForecastModelRuntimeAdapter",
@@ -134,6 +136,7 @@ __all__ = [
     "apply_conformal_forecast",
     "audit_dataframe",
     "browse_opcua_source",
+    "build_diagnosis_deployment_spec",
     "build_forecasting_deployment_spec",
     "build_platform_application",
     "build_platform_report",
