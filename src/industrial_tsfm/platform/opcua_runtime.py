@@ -13,7 +13,7 @@ from .opcua import (
     config_from_source,
     public_connection_metadata,
 )
-from .runtime import BoundedLiveBuffer, LiveSample
+from .runtime import BoundedLiveBuffer, LiveSample, TimeSeriesWindow
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -190,6 +190,11 @@ class OPCUALiveRuntime:
                 backoff = min(backoff * 2.0, self.reconnect_max_seconds)
         self.state.connected = False
         self.state.status = "stopped"
+
+    def materialize_window(self, max_observations: int | None = None) -> TimeSeriesWindow:
+        """Expose the standard source-agnostic runtime window contract."""
+
+        return self.buffer.materialize_window(max_observations)
 
     def snapshot(self) -> dict[str, Any]:
         return {
