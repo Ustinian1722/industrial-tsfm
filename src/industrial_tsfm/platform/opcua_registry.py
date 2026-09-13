@@ -24,7 +24,9 @@ class OPCUALiveRuntimeRegistry:
 
     Registry state is intentionally ephemeral in this first live slice. Project
     configuration remains persisted by WorkspaceStore, while active sockets and
-    tasks are tied to the API process that owns them.
+    tasks are tied to the API process that owns them. Completed runtime entries
+    may remain available as operational history and do not block a restart of the
+    same project/source pair.
     """
 
     def __init__(
@@ -43,12 +45,14 @@ class OPCUALiveRuntimeRegistry:
         project_id: str | None = None,
     ) -> dict[str, Any]:
         async with self._lock:
-            existing = [
+            active = [
                 entry
                 for entry in self._entries.values()
-                if entry.project_id == project_id and entry.source_name == source.name
+                if entry.project_id == project_id
+                and entry.source_name == source.name
+                and not entry.task.done()
             ]
-            if existing:
+            if active:
                 scope = f" in project {project_id!r}" if project_id is not None else ""
                 raise RuntimeError(f"OPC-UA runtime already active for source {source.name!r}{scope}")
             self._counter += 1
