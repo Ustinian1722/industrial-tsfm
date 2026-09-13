@@ -4,19 +4,17 @@ from typing import Any
 
 from fastapi import APIRouter, FastAPI, HTTPException
 
+from .forecasting_deployment import build_forecasting_deployment_spec
 from .forecasting_registry import LiveForecastingRegistry
+from .workspace import WorkspaceStore
 
 
 def attach_forecasting_routes(
     app: FastAPI,
+    workspace: WorkspaceStore,
     registry: LiveForecastingRegistry | None = None,
 ) -> LiveForecastingRegistry:
-    """Attach inference-only live forecasting routes to the platform API.
-
-    Model loading/registration is intentionally kept outside the HTTP surface in
-    this slice. Only already prepared, frozen forecasting applications may be
-    executed through these routes.
-    """
+    """Attach validation-bound, inference-only live forecasting routes."""
 
     active_registry = registry or LiveForecastingRegistry()
     router = APIRouter(prefix="/v1", tags=["forecasting-live"])
@@ -26,9 +24,16 @@ def attach_forecasting_routes(
         return {
             "schema_version": "industrial_tsfm.live_forecasting_capabilities.v1",
             "runtime_registry": "process_local_v1",
-            "operations": ["list", "status", "infer", "remove"],
+            "operations": [
+                "build_deployment_spec",
+                "list",
+                "status",
+                "infer",
+                "remove",
+            ],
             "http_model_registration": False,
             "online_training": False,
+            "online_model_selection": False,
             "online_calibration": False,
             "window_contract": "WindowProvider",
             "modes": ["per_tag_univariate", "strict_multivariate"],
@@ -36,6 +41,47 @@ def attach_forecasting_routes(
             "hidden_interpolation": False,
             "irregular_cadence_timestamp_policy": "do_not_invent_future_timestamps",
         }
+
+    @router.post("/projects/{project_id}/forecasting/{task_name}/deployment", status_code=201)
+    def build_deployment(
+        project_id: str,
+        task_name: str,
+        payload: dict[str, Any],
+    ) -> dict[str, Any]:
+        source_name = str(payload.get("source_name", "")).strip()
+        if not source_name:
+            raise HTTPException(status_code=422, detail="source_name is required")
+        try:
+            project = workspace.get_project(project_id)
+            model_route = workspace.read_derived_artifact(
+                project_id,
+                f"model-route-{task_name}",
+            )
+            spec = build_forecasting_deployment_spec(
+                project,
+                source_name=source_name,
+                task_name=task_name,
+                model_route=model_route,
+                deployment_id=payload.get("deployment_id"),
+                window_mode=payload.get("window_mode"),
+                checkpoint_ref=payload.get("checkpoint_ref"),
+                uq_artifact_ref=payload.get("uq_artifact_ref"),
+            )
+        except KeyError as exc:
+            raise HTTPException(
+                status_code=404,
+                detail="project, source, task, or persisted model route not found",
+            ) from exc
+        except (TypeError, ValueError) as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
+        result = spec.to_dict()
+        result["project_id"] = project_id
+        workspace.write_derived_artifact(
+            project_id,
+            f"forecasting-deployment-{task_name}",
+            result,
+        )
+        return result
 
     @router.get("/forecasting/applications")
     def list_forecasting_applications() -> dict[str, Any]:
