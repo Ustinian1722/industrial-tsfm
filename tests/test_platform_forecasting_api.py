@@ -6,7 +6,6 @@ pytest.importorskip("fastapi")
 pytest.importorskip("httpx")
 from fastapi.testclient import TestClient
 
-from industrial_tsfm.models.naive import NaiveModel
 from industrial_tsfm.platform.contracts import (
     DataSourceKind,
     DataSourceSpec,
@@ -15,6 +14,7 @@ from industrial_tsfm.platform.contracts import (
     TaskType,
 )
 from industrial_tsfm.platform.forecasting import (
+    DeterministicPersistenceForecastModel,
     ForecastingRequest,
     ForecastModelRuntimeAdapter,
     LiveForecastingApplication,
@@ -34,7 +34,7 @@ def _registry() -> LiveForecastingRegistry:
         ]
     )
     application = LiveForecastingApplication(
-        ForecastModelRuntimeAdapter(NaiveModel().configure(1)),
+        ForecastModelRuntimeAdapter(DeterministicPersistenceForecastModel(1)),
         ForecastingRequest(target_columns=("x",), context_length=2, horizon=1),
     )
     registry = LiveForecastingRegistry()
