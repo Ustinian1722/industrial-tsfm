@@ -26,3 +26,10 @@ def test_dashboard_surfaces_analytics_and_runtime_boundaries() -> None:
     assert "diagnosisAppCount" in html
     assert "not causal root-cause proof" in html
     assert "no online fitting, threshold updates, artifact adaptation or control actions" in html
+    assert "Decision Support" in html
+    assert "/v1/decision-support/applications" in html
+    assert "decisionSupportAppCount" in html
+    assert "deterministic advisory ranking, not process simulation or causal action-effect proof" in html
+    assert "Operator confirmation is required" in html
+    assert "execution, control actions, OPC-UA writes, online learning and LLM actions are disabled" in html
+    assert "diagnosis → decision support → optimization/control → Agent orchestration" in html
