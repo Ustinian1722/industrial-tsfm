@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from pathlib import Path
 
-
 _PRODUCTION_FILES = (
     "src/industrial_tsfm/platform/decision_support.py",
     "src/industrial_tsfm/platform/decision_support_registry.py",
