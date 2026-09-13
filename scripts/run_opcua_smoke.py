@@ -10,6 +10,10 @@ from asyncua import Server, ua
 from industrial_tsfm.platform import (
     DataSourceKind,
     DataSourceSpec,
+    DeterministicPersistenceForecastModel,
+    ForecastingRequest,
+    ForecastModelRuntimeAdapter,
+    LiveForecastingApplication,
     OPCUALiveRuntime,
     browse_opcua_source,
     read_opcua_snapshot,
@@ -36,6 +40,7 @@ async def _build_server(endpoint: str, *, temperature_value: float, pressure_val
         "Pressure",
         pressure_value,
     )
+    # Test-server writes simulate PLC value changes. Product/client code remains read-only.
     await temperature.set_writable()
     await pressure.set_writable()
     return server, process, temperature, pressure
@@ -157,6 +162,32 @@ async def main() -> None:
             description="post-reconnect subscription data",
         )
 
+        forecast_app = LiveForecastingApplication(
+            ForecastModelRuntimeAdapter(
+                DeterministicPersistenceForecastModel(horizon=2),
+                model_metadata={"purpose": "runtime_contract_smoke"},
+            ),
+            ForecastingRequest(
+                target_columns=("temperature",),
+                context_length=2,
+                horizon=2,
+                mode="per_tag_univariate",
+            ),
+        )
+        live_forecast = forecast_app.infer(live).to_dict()
+        (output_dir / "live_forecast.json").write_text(
+            json.dumps(live_forecast, ensure_ascii=False, indent=2, default=str),
+            encoding="utf-8",
+        )
+        if live_forecast["source_kind"] != "live":
+            raise RuntimeError("forecast did not consume the live runtime window")
+        if live_forecast["online_training"] is not False:
+            raise RuntimeError("live forecast smoke must remain inference-only")
+        if live_forecast["model"]["name"] != "persistence-ci":
+            raise RuntimeError("unexpected live forecast CI model")
+        if len(live_forecast["forecasts"]) != 2:
+            raise RuntimeError("live forecast did not emit the configured horizon")
+
         stop_event.set()
         await asyncio.wait_for(live_task, timeout=3.0)
         live_snapshot = live.snapshot()
@@ -184,6 +215,7 @@ async def main() -> None:
         print(f"disconnects={live_snapshot['state']['disconnects']}")
         print(f"reconnects={live_snapshot['state']['reconnects']}")
         print(f"data_gap_seconds={live_snapshot['state']['data_gap_seconds']:.3f}")
+        print(f"forecast_points={len(live_forecast['forecasts'])}")
     finally:
         if stop_event is not None:
             stop_event.set()
