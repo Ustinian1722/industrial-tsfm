@@ -11,6 +11,15 @@ from sklearn.preprocessing import StandardScaler
 from .runtime import TimeSeriesWindow, WindowProvider
 
 
+def _chronology_valid(window: TimeSeriesWindow) -> bool:
+    if window.timestamp_column is None:
+        return True
+    return (
+        int(window.metadata.get("parse_failures", 0)) == 0
+        and int(window.metadata.get("out_of_order_transitions", 0)) == 0
+    )
+
+
 @dataclass(frozen=True)
 class PCASPEArtifact:
     """Frozen PCA-SPE calibration state for deployment-time anomaly scoring."""
@@ -180,7 +189,12 @@ def score_pca_spe_artifact(
 
 
 class OnlinePCASPEAnomalyDetector:
-    """Window-provider adapter for fixed-artifact online anomaly inference."""
+    """Window-provider adapter for fixed-artifact online anomaly inference.
+
+    The default runtime path rejects nonchronological timestamp evidence rather
+    than reordering it. Thresholds and preprocessing remain frozen regardless of
+    runtime data.
+    """
 
     def __init__(
         self,
@@ -188,6 +202,7 @@ class OnlinePCASPEAnomalyDetector:
         *,
         context_observations: int | None = None,
         top_k_sensors: int = 5,
+        require_chronological: bool = True,
     ) -> None:
         if context_observations is not None and context_observations < 1:
             raise ValueError("context_observations must be positive when configured")
@@ -196,6 +211,7 @@ class OnlinePCASPEAnomalyDetector:
         self.artifact = artifact
         self.context_observations = context_observations
         self.top_k_sensors = int(top_k_sensors)
+        self.require_chronological = bool(require_chronological)
 
     @staticmethod
     def _observed_through(window: TimeSeriesWindow) -> str | None:
@@ -207,6 +223,11 @@ class OnlinePCASPEAnomalyDetector:
 
     def infer(self, provider: WindowProvider) -> dict[str, Any]:
         window = provider.materialize_window(self.context_observations)
+        if self.require_chronological and not _chronology_valid(window):
+            raise ValueError(
+                "online anomaly inference requires chronological timestamps; "
+                "the runtime preserves arrival order and will not sort or repair the window"
+            )
         result = score_pca_spe_artifact(
             self.artifact,
             window.frame,
@@ -216,6 +237,7 @@ class OnlinePCASPEAnomalyDetector:
             {
                 "source_kind": window.source_kind,
                 "observed_through": self._observed_through(window),
+                "chronology_valid": _chronology_valid(window),
                 "window": window.snapshot(),
             }
         )
